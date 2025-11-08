@@ -222,11 +222,87 @@ function createStabilizer(params) {
 }
 
 // ============================================
-// GEMINI API INTEGRATION
+// GEMINI API INTEGRATION - AUTO-DETECT MODEL
 // ============================================
+
+// Cache for the working model (so we don't have to detect every time)
+let cachedWorkingModel = null;
+
+// Find a working Gemini model automatically
+async function findWorkingModel(apiKey) {
+    console.log('🔍 Auto-detecting working Gemini model...');
+    
+    // Try to list available models
+    try {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`
+        );
+        
+        if (!response.ok) {
+            throw new Error('Could not list models');
+        }
+        
+        const data = await response.json();
+        
+        // Find models that support generateContent
+        if (data.models && data.models.length > 0) {
+            for (const model of data.models) {
+                const methods = model.supportedGenerationMethods || [];
+                if (methods.includes('generateContent')) {
+                    // Extract just the model name (e.g., "gemini-1.5-flash" from "models/gemini-1.5-flash")
+                    const modelName = model.name.replace('models/', '');
+                    console.log('✓ Found working model:', modelName);
+                    return modelName;
+                }
+            }
+        }
+    } catch (error) {
+        console.log('⚠️ Could not auto-detect, trying fallback models...');
+    }
+    
+    // Fallback: try common models in order
+    const fallbackModels = [
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-latest',
+        'gemini-pro'
+    ];
+    
+    for (const model of fallbackModels) {
+        try {
+            console.log(`🧪 Testing ${model}...`);
+            const testResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: 'test' }] }]
+                    })
+                }
+            );
+            
+            if (testResponse.ok) {
+                console.log(`✓ ${model} works!`);
+                return model;
+            }
+        } catch (error) {
+            console.log(`✗ ${model} failed`);
+        }
+    }
+    
+    throw new Error('No working Gemini model found. Please check your API key.');
+}
 
 async function callGeminiAPI(apiKey, userInput) {
     console.log('🤖 Calling Gemini API...');
+
+    // Find working model if we haven't already
+    if (!cachedWorkingModel) {
+        cachedWorkingModel = await findWorkingModel(apiKey);
+    }
+    
+    console.log('📡 Using model:', cachedWorkingModel);
 
     // Create prompt for AI
     const prompt = `Extract aircraft part parameters from this description and return ONLY valid JSON.
@@ -247,9 +323,9 @@ Extract these parameters:
 Return ONLY the JSON object, no other text.`;
 
     try {
-        // Make API request to Gemini
+        // Make API request to Gemini with auto-detected model
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1/models/${cachedWorkingModel}:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -266,6 +342,8 @@ Return ONLY the JSON object, no other text.`;
         // Check if request was successful
         if (!response.ok) {
             const errorData = await response.json();
+            // If model failed, clear cache and try again
+            cachedWorkingModel = null;
             throw new Error(errorData.error?.message || 'API request failed');
         }
 
