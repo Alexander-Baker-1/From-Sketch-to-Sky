@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Aircraft Generator</title>
+</head>
+<body>
+    <h1>AI Aircraft Part Generator</h1>
+    
+    <!-- Input Section -->
+    <div>
+        <label>Describe your aircraft part:</label>
+        <textarea id="userInput" rows="4" cols="50"></textarea>
+    </div>
+    
+    <div>
+        <label>Your Gemini API Key:</label>
+        <input type="text" id="apiKey" placeholder="Paste API key here">
+    </div>
+    
+    <button id="generateBtn">Generate Part</button>
+    
+    <!-- Output Section -->
+    <div id="output">
+        <p>Results will appear here...</p>
+    </div>
+
+    <script>
+        // JavaScript will go here
+        document.getElementById('generateBtn').addEventListener('click', function() {
+            alert('Button clicked! We will add AI next.');
+        });
+    </script>
+</body>
+</html>
