@@ -4,32 +4,143 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Aircraft Generator</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Container for everything */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        /* Title */
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Input groups */
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        /* Text input and textarea */
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        textarea:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* Button */
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Output section */
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            min-height: 100px;
+        }
+
+        #output p {
+            color: #666;
+            line-height: 1.6;
+        }
+    </style>
 </head>
 <body>
-    <h1>AI Aircraft Part Generator</h1>
-    
-    <!-- Input Section -->
-    <div>
-        <label>Describe your aircraft part:</label>
-        <textarea id="userInput" rows="4" cols="50"></textarea>
-    </div>
-    
-    <div>
-        <label>Your Gemini API Key:</label>
-        <input type="text" id="apiKey" placeholder="Paste API key here">
-    </div>
-    
-    <button id="generateBtn">Generate Part</button>
-    
-    <!-- Output Section -->
-    <div id="output">
-        <p>Results will appear here...</p>
+    <div class="container">
+        <h1>✈️ AI Aircraft Part Generator</h1>
+        
+        <!-- API Key Input -->
+        <div class="input-group">
+            <label>Gemini API Key:</label>
+            <input type="text" id="apiKey" placeholder="Paste your API key here">
+        </div>
+        
+        <!-- Description Input -->
+        <div class="input-group">
+            <label>Describe Your Aircraft Part:</label>
+            <textarea id="userInput" placeholder="Example: Generate a swept wing with 35 degree sweep angle"></textarea>
+        </div>
+        
+        <button id="generateBtn">Generate Part</button>
+        
+        <!-- Output Section -->
+        <div id="output">
+            <p>Results will appear here...</p>
+        </div>
     </div>
 
     <script>
         // JavaScript will go here
         document.getElementById('generateBtn').addEventListener('click', function() {
-            alert('Button clicked! We will add AI next.');
+            const userInput = document.getElementById('userInput').value;
+            const output = document.getElementById('output');
+            
+            if (!userInput) {
+                output.innerHTML = '<p style="color: red;">Please enter a description!</p>';
+                return;
+            }
+            
+            output.innerHTML = '<p>You typed: ' + userInput + '</p>';
         });
     </script>
 </body>
