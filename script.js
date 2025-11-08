@@ -2,7 +2,7 @@
 // THREE.JS SETUP - 3D GRAPHICS ENGINE
 // ============================================
 
-let scene, camera, renderer, currentMesh;
+let scene, camera, renderer, currentMesh, controls;
 
 // Initialize Three.js when page loads
 window.addEventListener('load', initThreeJS);
@@ -33,6 +33,14 @@ function initThreeJS() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     container.appendChild(renderer.domElement);
+
+    // Enable camera orbit controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;   // smooth movement
+    controls.dampingFactor = 0.05;   // how smooth
+    controls.rotateSpeed = 0.5;      // mouse rotation speed
+    controls.zoomSpeed = 0.8;        // mouse wheel zoom speed
+    controls.panSpeed = 0.5;         // right-click drag
 
     // 4. ADD LIGHTS (so we can see things)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);  // Soft overall light
@@ -67,6 +75,7 @@ function animate() {
         currentMesh.rotation.y += 0.005;  // Rotate around Y axis
     }
 
+    if (controls) controls.update();   // required for damping
     // Render the scene from camera's perspective
     renderer.render(scene, camera);
 }
@@ -122,9 +131,19 @@ function generateAircraftPart(params) {
         geometry = new THREE.BoxGeometry(3, 1, 6);
     }
 
+    // Center geometry so it's not offset below the grid
+    geometry.computeBoundingBox();
+    geometry.center();
+
     // Create mesh and add to scene
     currentMesh = new THREE.Mesh(geometry, material);
     scene.add(currentMesh);
+
+    // Position mesh above grid based on its height
+    const box = geometry.boundingBox;
+    const height = box.max.y - box.min.y;
+    currentMesh.position.y = height / 2;  // sits neatly on the grid
+
 
     // Add wireframe overlay for detail
     const wireframe = new THREE.WireframeGeometry(geometry);
