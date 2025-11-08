@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Aircraft Generator - Stage 5</title>
+    <title>AI Aircraft Generator - Stage 6</title>
+    <!-- Load Three.js library from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -19,58 +21,50 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
+            display: flex;
+            gap: 20px;
+        }
+
+        .left-panel {
+            flex: 1;
             background: white;
             border-radius: 10px;
-            padding: 30px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .right-panel {
+            flex: 2;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
 
         h1 {
             color: #333;
             margin-bottom: 10px;
-            text-align: center;
+            font-size: 24px;
         }
 
         .subtitle {
-            text-align: center;
             color: #666;
             margin-bottom: 20px;
-            font-size: 14px;
-        }
-
-        .ai-level-selector {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            justify-content: center;
-        }
-
-        .ai-level-btn {
-            padding: 8px 16px;
-            border: 2px solid #ddd;
-            background: white;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .ai-level-btn.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
+            font-size: 13px;
         }
 
         .input-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         label {
             display: block;
             color: #555;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             font-weight: bold;
+            font-size: 14px;
         }
 
         textarea, input[type="text"] {
@@ -78,11 +72,11 @@
             padding: 10px;
             border: 2px solid #ddd;
             border-radius: 5px;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         textarea {
-            min-height: 100px;
+            min-height: 80px;
             resize: vertical;
         }
 
@@ -93,7 +87,7 @@
             color: white;
             border: none;
             border-radius: 5px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             cursor: pointer;
         }
@@ -102,30 +96,46 @@
             opacity: 0.5;
         }
 
-        #output {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 5px;
+        /* 3D Viewer styles */
+        #viewer {
+            width: 100%;
+            height: 500px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            position: relative;
         }
 
-        .reasoning-box {
-            background: #fff3cd;
-            padding: 15px;
+        .viewer-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 8px 12px;
             border-radius: 5px;
-            margin-bottom: 15px;
-            border-left: 4px solid #ffc107;
+            font-size: 12px;
+            color: #333;
+            z-index: 10;
+        }
+
+        #output {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-size: 13px;
         }
 
         .params-box {
             background: #e8f5e9;
-            padding: 15px;
+            padding: 12px;
             border-radius: 5px;
+            margin-top: 10px;
         }
 
         .param-item {
-            padding: 5px 0;
+            padding: 3px 0;
             font-family: monospace;
+            font-size: 12px;
         }
 
         .loading { color: #667eea; }
@@ -135,192 +145,198 @@
 </head>
 <body>
     <div class="container">
-        <h1>✈️ AI Aircraft Part Generator</h1>
-        <p class="subtitle">Stage 5: All Three AI Levels - Choose Your Intelligence!</p>
-        
-        <!-- AI Level Selector -->
-        <div class="ai-level-selector">
-            <button class="ai-level-btn active" data-level="minimum">Minimum AI</button>
-            <button class="ai-level-btn" data-level="medium">Medium AI</button>
-            <button class="ai-level-btn" data-level="maximum">Maximum AI</button>
+        <!-- LEFT PANEL: Controls -->
+        <div class="left-panel">
+            <h1>✈️ AI Aircraft Generator</h1>
+            <p class="subtitle">Stage 6: Adding 3D Viewer</p>
+            
+            <div class="input-group">
+                <label>Gemini API Key:</label>
+                <input type="text" id="apiKey" placeholder="Paste your API key">
+            </div>
+            
+            <div class="input-group">
+                <label>Describe Aircraft Part:</label>
+                <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep"></textarea>
+            </div>
+            
+            <button id="generateBtn">Generate 3D Part</button>
+            
+            <div id="output">
+                <p>3D viewer is ready! Enter a description and generate.</p>
+            </div>
         </div>
-        
-        <div class="input-group">
-            <label>Gemini API Key:</label>
-            <input type="text" id="apiKey" placeholder="Paste your API key">
-        </div>
-        
-        <div class="input-group">
-            <label>Describe Your Aircraft Part:</label>
-            <textarea id="userInput" placeholder="Example: I need something for high-speed supersonic flight"></textarea>
-        </div>
-        
-        <button id="generateBtn">Generate with AI</button>
-        
-        <div id="output">
-            <p>Select an AI level and describe your part...</p>
+
+        <!-- RIGHT PANEL: 3D Viewer -->
+        <div class="right-panel">
+            <h1>3D Viewer</h1>
+            <div id="viewer">
+                <div class="viewer-label">🎮 Click and drag to rotate</div>
+            </div>
         </div>
     </div>
 
     <script>
         // ============================================
-        // AI LEVEL SELECTOR
+        // STAGE 6: THREE.JS 3D VIEWER SETUP
         // ============================================
-        let currentAILevel = 'minimum';
 
-        document.querySelectorAll('.ai-level-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                // Remove active class from all
-                document.querySelectorAll('.ai-level-btn').forEach(b => b.classList.remove('active'));
-                // Add to clicked
-                this.classList.add('active');
-                // Store selected level
-                currentAILevel = this.dataset.level;
+        let scene, camera, renderer, currentMesh;
+
+        // Initialize Three.js when page loads
+        window.addEventListener('load', initThreeJS);
+
+        function initThreeJS() {
+            console.log('Initializing Three.js...');
+
+            // Get the viewer container
+            const container = document.getElementById('viewer');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // 1. CREATE SCENE (the 3D world)
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);  // Light gray background
+
+            // 2. CREATE CAMERA (your eyes into the 3D world)
+            camera = new THREE.PerspectiveCamera(
+                75,                    // Field of view (how wide you can see)
+                width / height,        // Aspect ratio
+                0.1,                   // Near clipping plane
+                1000                   // Far clipping plane
+            );
+            camera.position.set(5, 5, 10);  // Position camera in 3D space (x, y, z)
+            camera.lookAt(0, 0, 0);         // Point camera at origin
+
+            // 3. CREATE RENDERER (draws everything to screen)
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            container.appendChild(renderer.domElement);
+
+            // 4. ADD LIGHTS (so we can see things)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);  // Soft overall light
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Strong directional light
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+
+            // 5. ADD GRID (floor reference)
+            const gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0xcccccc);
+            scene.add(gridHelper);
+
+            // 6. ADD AXES HELPER (shows X, Y, Z directions)
+            const axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+
+            // 7. ADD A TEST CUBE (so we see something immediately)
+            createTestCube();
+
+            // 8. START ANIMATION LOOP (makes things rotate)
+            animate();
+
+            // 9. HANDLE WINDOW RESIZE
+            window.addEventListener('resize', onWindowResize);
+
+            console.log('Three.js initialized successfully!');
+        }
+
+        // Create a simple test cube
+        function createTestCube() {
+            const geometry = new THREE.BoxGeometry(2, 2, 2);  // 2x2x2 cube
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x667eea,      // Purple color
+                metalness: 0.3,       // Slightly metallic
+                roughness: 0.7        // Not too shiny
             });
-        });
+            
+            currentMesh = new THREE.Mesh(geometry, material);
+            scene.add(currentMesh);
+        }
+
+        // Animation loop - runs ~60 times per second
+        function animate() {
+            requestAnimationFrame(animate);  // Call this function again next frame
+
+            // Rotate the current mesh slowly
+            if (currentMesh) {
+                currentMesh.rotation.y += 0.01;  // Rotate around Y axis
+            }
+
+            // Render the scene from camera's perspective
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resizing
+        function onWindowResize() {
+            const container = document.getElementById('viewer');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
 
         // ============================================
-        // MAIN GENERATION FUNCTION
+        // GENERATE BUTTON (will connect to AI next stage)
         // ============================================
         document.getElementById('generateBtn').addEventListener('click', async function() {
             const userInput = document.getElementById('userInput').value.trim();
             const apiKey = document.getElementById('apiKey').value.trim();
             const output = document.getElementById('output');
-            const button = document.getElementById('generateBtn');
 
-            if (!apiKey || !userInput) {
+            if (!userInput || !apiKey) {
                 output.innerHTML = '<p class="error">Please fill in all fields!</p>';
                 return;
             }
 
-            button.disabled = true;
-            output.innerHTML = '<p class="loading">🤖 AI is thinking...</p>';
+            output.innerHTML = '<p class="loading">🤖 AI is extracting parameters...</p>';
 
             try {
-                const result = await callGeminiAPI(apiKey, userInput, currentAILevel);
-                displayResult(result, currentAILevel);
+                // Call AI to get parameters
+                const params = await callGeminiAPI(apiKey, userInput);
+                
+                // Display parameters
+                displayParameters(params);
+                
+                // In next stage, we'll generate 3D shape from params!
+                output.innerHTML += '<p style="margin-top:10px;">✓ Parameters extracted! (3D generation coming in Stage 7)</p>';
+                
             } catch (error) {
                 output.innerHTML = `<p class="error">Error: ${error.message}</p>`;
-            } finally {
-                button.disabled = false;
             }
         });
 
-        // ============================================
-        // DISPLAY RESULTS
-        // ============================================
-        function displayResult(result, level) {
+        function displayParameters(params) {
             const output = document.getElementById('output');
-            let html = '';
-
-            if (level === 'minimum') {
-                // Just show text response
-                html = `<h3 class="success">✓ AI Response:</h3><p>${result}</p>`;
-                
-            } else if (level === 'medium') {
-                // Show extracted parameters
-                html = '<h3 class="success">✓ Extracted Parameters:</h3>';
-                html += '<div class="params-box">';
-                for (const [key, value] of Object.entries(result)) {
-                    if (value) {
-                        html += `<div class="param-item"><strong>${key}:</strong> ${value}</div>`;
-                    }
+            let html = '<h4 class="success">✓ Extracted Parameters:</h4>';
+            html += '<div class="params-box">';
+            for (const [key, value] of Object.entries(params)) {
+                if (value) {
+                    html += `<div class="param-item"><strong>${key}:</strong> ${value}</div>`;
                 }
-                html += '</div>';
-                
-            } else if (level === 'maximum') {
-                // Show reasoning + parameters
-                html = '<h3 class="success">✓ AI Recommendation:</h3>';
-                html += '<div class="reasoning-box">';
-                html += `<h4>💡 Reasoning:</h4><p>${result.reasoning}</p>`;
-                html += '</div>';
-                html += '<h4>📊 Recommended Parameters:</h4>';
-                html += '<div class="params-box">';
-                for (const [key, value] of Object.entries(result.parameters)) {
-                    if (value) {
-                        html += `<div class="param-item"><strong>${key}:</strong> ${value}</div>`;
-                    }
-                }
-                html += '</div>';
             }
-
+            html += '</div>';
             output.innerHTML = html;
         }
 
         // ============================================
-        // GEMINI API - ALL THREE LEVELS
+        // GEMINI API CALL
         // ============================================
-        async function callGeminiAPI(apiKey, userInput, aiLevel) {
-            let prompt = '';
+        async function callGeminiAPI(apiKey, userInput) {
+            const prompt = `Extract aircraft part parameters from: "${userInput}"
 
-            // MINIMUM AI: Simple recognition
-            if (aiLevel === 'minimum') {
-                prompt = `You are an aircraft part identifier.
-                
-The user said: "${userInput}"
-
-Identify what aircraft part they want in one simple sentence.`;
-            }
-
-            // MEDIUM AI: Extract parameters
-            else if (aiLevel === 'medium') {
-                prompt = `Extract parameters from this aircraft description and return ONLY valid JSON:
-
-"${userInput}"
-
-Format:
+Return ONLY valid JSON:
 {
   "type": "wing/fuselage/stabilizer",
   "span": number or null,
   "length": number or null,
   "diameter": number or null,
   "sweep": number or null,
-  "material": "string or null",
-  "description": "brief summary"
-}
+  "material": "string or null"
+}`;
 
-Return ONLY JSON, no other text.`;
-            }
-
-            // MAXIMUM AI: Reasoning + recommendations
-            else if (aiLevel === 'maximum') {
-                prompt = `You are an aerospace engineering expert. Analyze this requirement and recommend the best aircraft part.
-
-Requirement: "${userInput}"
-
-Provide reasoning and recommend parameters. Return ONLY valid JSON:
-
-{
-  "reasoning": "Explain WHY this part is best for the requirement. Include engineering principles (aerodynamics, structure, performance). Be specific about trade-offs.",
-  "parameters": {
-    "type": "recommended part type",
-    "span": number,
-    "sweep": number,
-    "material": "recommended material",
-    "description": "part description"
-  }
-}
-
-Example:
-Input: "I need something for high-speed flight"
-Output:
-{
-  "reasoning": "For high-speed flight, I recommend a delta wing. Delta wings provide: 1) Low drag at supersonic speeds due to swept leading edge, 2) Strong structure that handles high loads, 3) Sufficient internal volume for fuel. The 45° sweep angle is optimal for Mach 1.5-2.0 cruise speeds.",
-  "parameters": {
-    "type": "delta_wing",
-    "span": 15,
-    "sweep": 45,
-    "material": "titanium alloy",
-    "description": "Supersonic delta wing"
-  }
-}
-
-Now analyze: "${userInput}"
-
-Return ONLY JSON.`;
-            }
-
-            // Make API call
             const response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
                 {
@@ -333,24 +349,17 @@ Return ONLY JSON.`;
             );
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || 'API failed');
+                throw new Error('API request failed');
             }
 
             const data = await response.json();
             const text = data.candidates[0].content.parts[0].text;
-
-            // Return based on AI level
-            if (aiLevel === 'minimum') {
-                return text;  // Just return text
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
             } else {
-                // Extract and parse JSON
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    return JSON.parse(jsonMatch[0]);
-                } else {
-                    throw new Error('Could not parse AI response');
-                }
+                throw new Error('Could not parse response');
             }
         }
     </script>
