@@ -301,3 +301,5 @@ button:disabled {
 .slider-row input[type="range"] {
   width: 100%;
 }
+
+.slider-row input[type="number"] { padding: 6px 8px; font-size: 13px; }

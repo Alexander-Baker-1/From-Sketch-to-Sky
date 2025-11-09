@@ -5,31 +5,68 @@ let scene, camera, renderer, currentMesh, controls;
 let cachedWorkingModel = null;
 let currentParams = null;      // last validated params
 let suppressReframe = false;   // avoid camera jumps during slider drag
+let autorotate = true; // top-level state
 
 // ============================================
 // PERSISTENCE (LOCAL STORAGE)
 // ============================================
 const LS = {
-  rememberFlag: 'airgen.rememberKey',
-  apiKey:       'airgen.apiKey',
-  userInput:    'airgen.userInput',
-  paramsByType: 'airgen.paramsByType' // { wing:{}, fuselage:{}, stabilizer:{} }
+    rememberFlag: 'airgen.rememberKey',
+    apiKey: 'airgen.apiKey',
+    userInput: 'airgen.userInput',
+    paramsByType: 'airgen.paramsByType' // { wing:{}, fuselage:{}, stabilizer:{} }
 };
 
 function loadJSON(key, fallback = null) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch { return fallback; }
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+    catch { return fallback; }
 }
 function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, JSON.stringify(value));
 }
 function removeKeys(...keys) {
-  keys.forEach(k => localStorage.removeItem(k));
+    keys.forEach(k => localStorage.removeItem(k));
 }
 function coerce(v, fallback) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
 }
+
+function parseMeasurementFromText(t) {
+    t = String(t || '');
+    // sweep: "35 deg", "35°"
+    const ang = t.match(/(-?\d+(?:\.\d+)?)\s*(deg|degree|degrees|°)/i);
+    const sweepDeg = ang ? parseFloat(ang[1]) : null;
+  
+    // length with unit (first occurrence)
+    const m = t.match(/(\d+(?:\.\d+)?)\s*(mm|millimeters?|cm|centimeters?|m|meters?|ft|feet|in|inch|inches)\b/i);
+    if (!m) return { meters: null, sweepDeg };
+  
+    let val = parseFloat(m[1]);
+    const unit = m[2].toLowerCase();
+  
+    let meters = null;
+    if (unit.startsWith('mm')) meters = val / 1000;
+    else if (unit.startsWith('cm')) meters = val / 100;
+    else if (unit === 'm' || unit.startsWith('meter')) meters = val;
+    else if (unit === 'ft' || unit.startsWith('feet')) meters = val * 0.3048;
+    else if (unit === 'in' || unit.startsWith('inch')) meters = val * 0.0254;
+  
+    return { meters, sweepDeg };
+}  
+
+function safeRemove(object) {
+    if (!object) return;
+    object?.traverse?.((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+            if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+            else o.material.dispose();
+        }
+    });
+    scene.remove(object);
+}
+
 
 // ============================================
 // THREE.JS SETUP - 3D GRAPHICS ENGINE
@@ -37,299 +74,363 @@ function coerce(v, fallback) {
 window.addEventListener('load', initThreeJS);
 
 function initThreeJS() {
-  console.log('🎨 Initializing Three.js...');
-  const container = document.getElementById('viewer');
-  const width = container.clientWidth;
-  const height = container.clientHeight;
+    console.log('🎨 Initializing Three.js...');
+    const container = document.getElementById('viewer');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
 
-  // 1) Scene
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf0f0f0);
+    // 1) Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
 
-  // 2) Camera
-  camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-  camera.position.set(5, 5, 10);
-  camera.lookAt(0, 0, 0);
+    // 2) Camera
+    camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    camera.position.set(5, 5, 10);
+    camera.lookAt(0, 0, 0);
 
-  // 3) Renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(width, height);
-  container.appendChild(renderer.domElement);
+    // 3) Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); // HiDPI
+    renderer.setSize(width, height);
+    container.appendChild(renderer.domElement);
 
-  // 4) Controls
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
+    // 4) Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
 
-  // 5) Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(10, 10, 10);
-  scene.add(directionalLight);
+    // 5) Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 10, 10);
+    scene.add(directionalLight);
 
-  // 6) Helpers
-  scene.add(new THREE.GridHelper(20, 20, 0x888888, 0xcccccc));
-  scene.add(new THREE.AxesHelper(5));
+    // 6) Helpers
+    scene.add(new THREE.GridHelper(20, 20, 0x888888, 0xcccccc));
+    scene.add(new THREE.AxesHelper(5));
 
-  // Resize + loop
-  window.addEventListener('resize', onWindowResize);
-  animate();
+    // Resize + loop
+    window.addEventListener('resize', onWindowResize);
+    animate();
 
-  // Load saved testing data
-  hydrateTestingState();
+    // Load saved testing data
+    hydrateTestingState();
 
-  console.log('✓ Three.js initialized successfully!');
+    console.log('✓ Three.js initialized successfully!');
 }
 
 function animate() {
-  requestAnimationFrame(animate);
-  if (currentMesh) currentMesh.rotation.y += 0.005;
-  if (controls) controls.update();
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    if (currentMesh && autorotate) currentMesh.rotation.y += 0.005;
+    controls?.update();
+    renderer.render(scene, camera);
 }
 
 function onWindowResize() {
-  const container = document.getElementById('viewer');
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-  renderer.setSize(width, height);
+    const container = document.getElementById('viewer');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
 }
 
 // ============================================
 // 3D AIRCRAFT PART GENERATION
 // ============================================
+
 function generateAircraftPart(params, options = {}) {
-  console.log('🛠️ Generating aircraft part:', params);
+    console.log('🛠️ Generating aircraft part:', params);
 
-  if (currentMesh) scene.remove(currentMesh);
+    if (currentMesh) { safeRemove(currentMesh); currentMesh = null; }
 
-  const partType = (params.type || 'unknown').toLowerCase();
-  let geometry;
+    const partType = (params.type || 'unknown').toLowerCase();
+    let geometry;
 
-  // Material
-  const materialColor =
-    params.material?.includes('carbon')   ? 0x222222 :
-    params.material?.includes('titanium') ? 0xcccccc :
-    params.material?.includes('aluminum') ? 0xaaaaaa :
-                                            0x4488ff;
+    // Material
+    const materialColor =
+        params.material?.includes('carbon') ? 0x222222 :
+            params.material?.includes('titanium') ? 0xcccccc :
+                params.material?.includes('aluminum') ? 0xaaaaaa :
+                    0x4488ff;
 
-  const material = new THREE.MeshStandardMaterial({
-    color: materialColor, metalness: 0.7, roughness: 0.3
-  });
+    const material = new THREE.MeshStandardMaterial({
+        color: materialColor, metalness: 0.7, roughness: 0.3
+    });
 
-  // Geometry
-  if (partType.includes('wing'))        geometry = createWing(params);
-  else if (partType.includes('fuselage'))   geometry = createFuselage(params);
-  else if (partType.includes('stabilizer')) geometry = createStabilizer(params);
-  else                                      geometry = new THREE.BoxGeometry(3, 1, 6);
+    // Geometry
+    if (partType.includes('wing')) geometry = createWing(params);
+    else if (partType.includes('fuselage')) geometry = createFuselage(params);
+    else if (partType.includes('stabilizer')) geometry = createStabilizer(params);
+    else geometry = new THREE.BoxGeometry(3, 1, 6);
 
-  geometry.computeBoundingBox();
-  geometry.center();
+    geometry.computeBoundingBox();
+    geometry.center();
+    geometry.computeBoundingSphere();
+    geometry.computeVertexNormals(); // ensure correct shading after transforms
 
-  const box = geometry.boundingBox;
-  const height = box.max.y - box.min.y;
+    const box = geometry.boundingBox;
+    const height = box.max.y - box.min.y;
 
-  currentMesh = new THREE.Mesh(geometry, material);
-  currentMesh.position.y = height / 2;
-  scene.add(currentMesh);
+    currentMesh = new THREE.Mesh(geometry, material);
+    currentMesh.position.y = height / 2;
+    scene.add(currentMesh);
+    if (options.reframe === true && !suppressReframe) {
+        frameObject(currentMesh, camera, controls);
+    }
 
-  // Auto-frame unless suppressed
-  const wantReframe = options.reframe === true && !suppressReframe;
-  if (wantReframe) frameObject(currentMesh, camera, controls);
+    // Auto-frame unless suppressed
+    const wantReframe = options.reframe === true && !suppressReframe;
+    if (wantReframe) frameObject(currentMesh, camera, controls);
 
-  // Wireframe overlay
-  const wireframe = new THREE.WireframeGeometry(geometry);
-  const line = new THREE.LineSegments(wireframe);
-  line.material.transparent = true;
-  line.material.opacity = 0.15;
-  currentMesh.add(line);
+    // Wireframe overlay
+    const wireframe = new THREE.WireframeGeometry(geometry);
+    const line = new THREE.LineSegments(wireframe);
+    line.material.transparent = true;
+    line.material.opacity = 0.15;
+    currentMesh.add(line);
 
-  console.log('✓ Aircraft part generated!');
+    console.log('✓ Aircraft part generated!');
 }
 
 function createWing(params) {
-  const span  = coerce(params.span, 10);
-  const chord = coerce(params.chord, 2);
-  const sweep = (coerce(params.sweep, 0)) * Math.PI / 180;
+    const span = coerce(params.span, 10);
+    const chord = coerce(params.chord, 2);
+    const sweep = (coerce(params.sweep, 0)) * Math.PI / 180;
 
-  const shape = new THREE.Shape();
-  shape.moveTo(0, 0);
-  shape.lineTo(chord, 0);
-  shape.lineTo(chord * 0.9, chord * 0.1);
-  shape.lineTo(chord * 0.1, chord * 0.1);
-  shape.closePath();
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(chord, 0);
+    shape.lineTo(chord * 0.9, chord * 0.1);
+    shape.lineTo(chord * 0.1, chord * 0.1);
+    shape.closePath();
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    steps: 20, depth: span,
-    bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3
-  });
-  geometry.rotateZ(sweep);
-  geometry.rotateX(Math.PI / 2);
-  return geometry;
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        steps: 20, depth: span,
+        bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3
+    });
+    geometry.rotateZ(sweep);
+    geometry.rotateX(Math.PI / 2);
+    return geometry;
 }
 
 function createFuselage(params) {
-  const length   = coerce(params.length, 8);
-  const diameter = coerce(params.diameter, 2);
+    const length = coerce(params.length, 8);
+    const diameter = coerce(params.diameter, 2);
 
-  const geometry = new THREE.CylinderGeometry(
-    diameter / 2,          // top
-    diameter / 2 * 0.8,    // bottom (tapered)
-    length, 32
-  );
-  geometry.rotateZ(Math.PI / 2);
-  return geometry;
+    const geometry = new THREE.CylinderGeometry(
+        diameter / 2,          // top
+        diameter / 2 * 0.8,    // bottom (tapered)
+        length, 32
+    );
+    geometry.rotateZ(Math.PI / 2);
+    return geometry;
 }
 
 function createStabilizer(params) {
-  const span  = coerce(params.span, 4);
-  const chord = 1.5;
+    const span = coerce(params.span, 4);
+    const chord = 1.5;
 
-  const shape = new THREE.Shape();
-  shape.moveTo(0, 0);
-  shape.lineTo(chord, 0);
-  shape.lineTo(chord * 0.8, chord * 0.15);
-  shape.lineTo(chord * 0.2, chord * 0.15);
-  shape.closePath();
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(chord, 0);
+    shape.lineTo(chord * 0.8, chord * 0.15);
+    shape.lineTo(chord * 0.2, chord * 0.15);
+    shape.closePath();
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    steps: 10, depth: span,
-    bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05
-  });
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        steps: 10, depth: span,
+        bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05
+    });
 
-  const type = (params.type || '').toLowerCase();
-  if (type.includes('vertical')) {
-    geometry.rotateX(Math.PI / 2);
-  } else {
-    const sweep = (coerce(params.sweep, 0)) * Math.PI / 180;
-    geometry.rotateZ(sweep);
-    geometry.rotateX(Math.PI / 2);
-  }
-  return geometry;
+    const type = (params.type || '').toLowerCase();
+    if (type.includes('vertical')) {
+        geometry.rotateX(Math.PI / 2);
+    } else {
+        const sweep = (coerce(params.sweep, 0)) * Math.PI / 180;
+        geometry.rotateZ(sweep);
+        geometry.rotateX(Math.PI / 2);
+    }
+    return geometry;
 }
 
 // ============================================
 // CAMERA AUTO-FRAMING (ZOOM TO FIT)
 // ============================================
+
 function frameObject(mesh, camera, controls) {
-  const box = new THREE.Box3().setFromObject(mesh);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-  box.getSize(size);
-  box.getCenter(center);
+    if (!mesh || !camera) return;
 
-  controls.target.copy(center);
+    mesh.updateMatrixWorld(true);
 
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const fov = camera.fov * (Math.PI / 180);
-  let distance = maxDim / Math.sin(fov / 2);
-  distance *= 0.6;
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (!isFinite(box.max.x)) return;
 
-  const newPos = center.clone().add(new THREE.Vector3(distance, distance, distance));
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
 
-  // Use GSAP if available; otherwise set directly
-  if (window.gsap && gsap.to) {
-    gsap.to(camera.position, {
-      x: newPos.x, y: newPos.y, z: newPos.z,
-      duration: 0.8, ease: "power2.out",
-      onUpdate: () => controls.update()
-    });
-  } else {
-    camera.position.copy(newPos);
-    controls.update();
-  }
+    // Looser framing
+    const fov = camera.fov * Math.PI / 180;
+    const distance = (sphere.radius / Math.sin(fov / 2)) * 1.4; // 1.4 = padding
+
+    const dir = new THREE.Vector3(1, 1, 1).normalize();
+    const newPos = sphere.center.clone().add(dir.multiplyScalar(distance));
+
+    // Update near/far to avoid clipping
+    camera.near = Math.max(0.01, distance / 100);
+    camera.far = Math.max(camera.near + 1, distance * 10);
+    camera.updateProjectionMatrix();
+
+    controls && (controls.target.copy(sphere.center));
+
+    if (window.gsap && gsap.to) {
+        gsap.to(camera.position, {
+            x: newPos.x, y: newPos.y, z: newPos.z,
+            duration: 0.8, ease: "power2.out",
+            onUpdate: () => controls?.update()
+        });
+    } else {
+        camera.position.copy(newPos);
+        controls?.update();
+    }
 }
+
 
 // ============================================
 // PARAMETER VALIDATION + WARNINGS
 // ============================================
-function validateParams(params, userInput) {
-  userInput = String(userInput || '');
-  const warnings = [];
 
-  // TYPE
-  if (!params.type || typeof params.type !== 'string') {
-    const guess = guessPartTypeFromText(userInput);
-    if (guess) {
-      warnings.push(`Type not detected from AI. Using inferred type: ${guess}.`);
-      params.type = guess;
+function validateParams(raw, userInput) {
+    const warnings = [];
+    const params = { ...raw };
+    const text = String(userInput || '').toLowerCase();
+  
+    // --- helpers ---
+    const isNum = (v) => Number.isFinite(Number(v));
+    const asNum = (v) => Number(v);
+  
+    // size in text: supports meters or feet
+    function parseSizeFromText(t) {
+      // match "2.5 m", "2 meters", "2ft", "2 feet", "2 foot"
+      const m = t.match(/(\d+(?:\.\d+)?)\s*(m|meter|meters|ft|feet|foot)\b/);
+      if (!m) return null;
+      const val = parseFloat(m[1]);
+      const unit = m[2];
+      if (!Number.isFinite(val)) return null;
+      if (unit === 'ft' || unit === 'feet' || unit === 'foot') return val * 0.3048; // feet → meters
+      return val; // meters
+    }
+  
+    // --- type ---
+    if (!params.type || typeof params.type !== 'string') {
+      const guess = guessPartTypeFromText(userInput);
+      if (guess) {
+        warnings.push(`Type not detected from AI. Using inferred type: ${guess}.`);
+        params.type = guess;
+      } else {
+        throw new Error('Invalid or missing part type. Please describe a wing, fuselage, or stabilizer.');
+      }
+    }
+    params.type = params.type.toLowerCase();
+  
+    // --- material ---
+    const allowedMaterials = ['carbon', 'titanium', 'aluminum'];
+    if (typeof params.material === 'string') {
+      const m = params.material.toLowerCase();
+      params.material = allowedMaterials.includes(m) ? m : null;
     } else {
-      throw new Error('Invalid or missing part type. Please describe a wing, fuselage, or stabilizer.');
+      params.material = null;
     }
-  }
-  params.type = params.type.toLowerCase();
-
-  // SPAN
-  if (params.span !== null && params.span !== undefined) {
-    if (isNaN(params.span) || params.span <= 0) {
-      warnings.push('Span must be a positive number. Using default 10m.');
-      params.span = 10;
+    if (!params.material) {
+      params.material = 'aluminum';
     }
-    if (params.span > 100) {
-      warnings.push('Span too large (>100m). Clamped to 100m.');
-      params.span = 100;
+  
+    // --- parse a size from text and map to primary dimension if needed ---
+    const sizeFromText = parseSizeFromText(text);
+  
+    // Coerce numeric fields to numbers or null
+    const keys = ['span','length','diameter','chord','sweep'];
+    for (const k of keys) {
+      if (params[k] === null || params[k] === undefined) continue;
+      const n = asNum(params[k]);
+      params[k] = Number.isFinite(n) ? n : null;
     }
-  }
-
-  // CHORD
-  if (params.chord !== null && params.chord !== undefined) {
-    if (isNaN(params.chord) || params.chord <= 0) {
-      warnings.push('Chord must be a positive number. Using default 2m.');
-      params.chord = 2;
+  
+    // Normalize per type, set defaults, clamp, and remove irrelevant keys
+    if (params.type.includes('wing')) {
+      // Map text size to span if span missing/invalid
+      if ((!isNum(params.span) || params.span <= 0) && Number.isFinite(sizeFromText) && sizeFromText > 0) {
+        params.span = sizeFromText;
+        warnings.push('Mapped provided size to wing span.');
+      }
+  
+      // Defaults & checks
+      if (!isNum(params.span) || params.span <= 0) { warnings.push('Using default wing span.'); params.span = 10; }
+      if (params.span > 100) { warnings.push('Span too large (>100m). Clamped.'); params.span = 100; }
+  
+      if (!isNum(params.chord) || params.chord <= 0) { warnings.push('Using default wing chord.'); params.chord = 2; }
+  
+      if (!isNum(params.sweep)) { warnings.push('Sweep must be a number. Using 0°.'); params.sweep = 0; }
+      params.sweep = Math.max(0, Math.min(60, params.sweep));
+  
+      // Remove irrelevant fields
+      delete params.length;
+      delete params.diameter;
+  
+    } else if (params.type.includes('fuselage')) {
+      // Map text size to length if length missing/invalid
+      if ((!isNum(params.length) || params.length <= 0) && Number.isFinite(sizeFromText) && sizeFromText > 0) {
+        params.length = sizeFromText;
+        warnings.push('Mapped provided size to fuselage length.');
+      }
+  
+      if (!isNum(params.length) || params.length <= 0) { warnings.push('Using default fuselage length.'); params.length = 8; }
+      if (!isNum(params.diameter) || params.diameter <= 0) { warnings.push('Using default fuselage diameter.'); params.diameter = 2; }
+  
+      // Fuselage doesn’t use chord or sweep in our model
+      delete params.chord;
+      delete params.sweep;
+      delete params.span;
+  
+    } else { // stabilizer (horizontal or vertical)
+      // Map text size to span if span missing/invalid
+      if ((!isNum(params.span) || params.span <= 0) && Number.isFinite(sizeFromText) && sizeFromText > 0) {
+        params.span = sizeFromText;
+        warnings.push('Mapped provided size to stabilizer span.');
+      }
+  
+      if (!isNum(params.span) || params.span <= 0) { warnings.push('Using default stabilizer span.'); params.span = 4; }
+  
+      if (!isNum(params.sweep)) { params.sweep = 0; }
+      params.sweep = Math.max(0, Math.min(60, params.sweep));
+  
+      // Remove irrelevant fields
+      delete params.length;
+      delete params.diameter;
+      delete params.chord;
     }
-  }
-
-  // SWEEP
-  if (params.sweep !== null && params.sweep !== undefined) {
-    if (isNaN(params.sweep)) {
-      warnings.push('Sweep must be a number. Using 0°.');
-      params.sweep = 0;
-    }
-    if (params.sweep < 0 || params.sweep > 60) {
-      warnings.push(`Sweep ${params.sweep}° out of range (0–60°). Clamped.`);
-      params.sweep = Math.max(0, Math.min(params.sweep, 60));
-    }
-  }
-
-  // LENGTH
-  if (params.length !== null && params.length !== undefined) {
-    if (isNaN(params.length) || params.length <= 0) {
-      warnings.push('Length must be a positive number. Using default 8m.');
-      params.length = 8;
-    }
-  }
-
-  // DIAMETER
-  if (params.diameter !== null && params.diameter !== undefined) {
-    if (isNaN(params.diameter) || params.diameter <= 0) {
-      warnings.push('Diameter must be a positive number. Using default 2m.');
-      params.diameter = 2;
-    }
-  }
-
-  return { params, warnings };
-}
+  
+    return { params, warnings };
+}  
 
 function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 function showWarningsAboveParams(warnings) {
-  const slot = document.getElementById('warnSlot');
-  if (!slot) return;
+    const slot = document.getElementById('warnSlot');
+    if (!slot) return;
 
-  if (!warnings || warnings.length === 0) {
-    slot.innerHTML = '';
-    return;
-  }
+    if (!warnings || warnings.length === 0) {
+        slot.innerHTML = '';
+        return;
+    }
 
-  const list = warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('');
-  slot.innerHTML = `
+    const list = warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('');
+    slot.innerHTML = `
     <div class="warning">
       <strong>⚠️ Parameter adjustments</strong>
       <ul style="margin:6px 0 0 18px;">${list}</ul>
@@ -341,129 +442,189 @@ function showWarningsAboveParams(warnings) {
 // UNIVERSAL PARAM PANEL (sliders per type)
 // ============================================
 function buildParamPanel(params) {
-  currentParams = { ...params };
-  const panel = document.getElementById('paramPanel');
-  const ctrl  = document.getElementById('paramControls');
-  if (!panel || !ctrl) return;
+    currentParams = { ...params };
+    const panel = document.getElementById('paramPanel');
+    const ctrl = document.getElementById('paramControls');
+    if (!panel || !ctrl) return;
 
-  const type = (params.type || '').toLowerCase();
-  const defsByType = {
-    wing: [
-      { key: 'span',     label: 'Span (m)',     min: 0.5, max: 100, step: 0.1, value: coerce(params.span, 10) },
-      { key: 'chord',    label: 'Chord (m)',    min: 0.1, max: 10,  step: 0.1, value: coerce(params.chord, 2) },
-      { key: 'sweep',    label: 'Sweep (°)',    min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) }
-    ],
-    fuselage: [
-      { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: coerce(params.length, 8) },
-      { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10,  step: 0.1, value: coerce(params.diameter, 2) }
-    ],
-    stabilizer: [
-      { key: 'span',     label: 'Span (m)',     min: 0.5, max: 30,  step: 0.1, value: coerce(params.span, 4) },
-      { key: 'sweep',    label: 'Sweep (°)',    min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) }
-    ]
-  };
+    const type = (params.type || '').toLowerCase();
+    const defsByType = {
+        wing: [
+            { key: 'span', label: 'Span (m)', min: 0.5, max: 100, step: 0.1, value: coerce(params.span, 10) },
+            { key: 'chord', label: 'Chord (m)', min: 0.1, max: 10, step: 0.1, value: coerce(params.chord, 2) },
+            { key: 'sweep', label: 'Sweep (°)', min: 0, max: 60, step: 1, value: coerce(params.sweep, 0) }
+        ],
+        fuselage: [
+            { key: 'length', label: 'Length (m)', min: 0.5, max: 100, step: 0.1, value: coerce(params.length, 8) },
+            { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10, step: 0.1, value: coerce(params.diameter, 2) }
+        ],
+        stabilizer: [
+            { key: 'span', label: 'Span (m)', min: 0.5, max: 30, step: 0.1, value: coerce(params.span, 4) },
+            { key: 'sweep', label: 'Sweep (°)', min: 0, max: 60, step: 1, value: coerce(params.sweep, 0) }
+        ]
+    };
 
-  const defList =
-    type.includes('wing')      ? defsByType.wing :
-    type.includes('fuselage')  ? defsByType.fuselage :
-                                 defsByType.stabilizer;
+    const defList =
+        type.includes('wing') ? defsByType.wing :
+            type.includes('fuselage') ? defsByType.fuselage :
+                defsByType.stabilizer;
 
-  ctrl.innerHTML = '';
-  defList.forEach(def => ctrl.appendChild(makeSlider(def)));
+    ctrl.innerHTML = '';
+    defList.forEach(def => ctrl.appendChild(makeSlider(def)));
 
-  panel.classList.remove('hidden');
+    // --- Material dropdown ---
+    const matWrap = document.createElement('div');
+    matWrap.className = 'slider-row';
+    const matLabel = document.createElement('label');
+    matLabel.textContent = 'Material';
+    matLabel.style.display = 'block';
+    matLabel.style.marginBottom = '6px';
+  
+    const matSelect = document.createElement('select');
+    ['aluminum','carbon','titanium'].forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m[0].toUpperCase() + m.slice(1);
+      matSelect.appendChild(opt);
+    });
+    matSelect.value = (params.material || 'aluminum');
+    matSelect.addEventListener('change', () => {
+      currentParams.material = matSelect.value;
+      regenerateFromPanel(false);
+    });
+  
+    matWrap.appendChild(matLabel);
+    matWrap.appendChild(matSelect);
+    ctrl.appendChild(matWrap);
+  
+    panel.classList.remove('hidden');  
 }
 
 function makeSlider({ key, label, min, max, step, value }) {
-  const wrap = document.createElement('div');
-  wrap.className = 'slider-row';
+    const wrap = document.createElement('div');
+    wrap.className = 'slider-row';
 
-  const id = `slider_${key}`;
-  const header = document.createElement('label');
-  header.setAttribute('for', id);
-  header.innerHTML = `${label} <span id="${id}_val">${value}</span>`;
+    const id = `slider_${key}`;
+    const numId = `num_${key}`;
 
-  const input = document.createElement('input');
-  input.type = 'range';
-  input.id = id;
-  input.min = String(min);
-  input.max = String(max);
-  input.step = String(step);
-  input.value = String(value);
+    // Header
+    const header = document.createElement('label');
+    header.setAttribute('for', id);
+    header.innerHTML = `${label} <span id="${id}_val">${value}</span>`;
 
-  input.addEventListener('input', () => {
-    document.getElementById(`${id}_val`).textContent = input.value;
-    currentParams[key] = parseFloat(input.value);
-    suppressReframe = true;
-    regenerateFromPanel(false);
-  });
+    // Range
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.id = id;
+    range.min = String(min);
+    range.max = String(max);
+    range.step = String(step);
+    range.value = String(value);
 
-  input.addEventListener('change', () => {
-    suppressReframe = false;
-    regenerateFromPanel(true);
-  });
+    // Number
+    const number = document.createElement('input');
+    number.type = 'number';
+    number.id = numId;
+    number.min = String(min);
+    number.max = String(max);
+    number.step = String(step);
+    number.value = String(value);
+    number.style.width = '90px';
+    number.style.marginLeft = '10px';
 
-  wrap.appendChild(header);
-  wrap.appendChild(input);
-  return wrap;
+    // Row layout
+    const controlsRow = document.createElement('div');
+    controlsRow.style.display = 'flex';
+    controlsRow.style.alignItems = 'center';
+    controlsRow.style.gap = '10px';
+    controlsRow.appendChild(range);
+    controlsRow.appendChild(number);
+
+    // Sync helpers
+    const setVal = (v, reframe) => {
+        const parsed = parseFloat(v);
+        if (!Number.isFinite(parsed)) return; // ignore until valid
+        const n = Math.max(min, Math.min(max, parsed));
+        range.value = String(n);
+        number.value = String(n);
+        document.getElementById(`${id}_val`).textContent = n;
+        currentParams[key] = n;
+        suppressReframe = !reframe;
+        regenerateFromPanel(reframe);
+    };
+
+    // Events
+    range.addEventListener('input', () => setVal(range.value, false));
+    range.addEventListener('change', () => setVal(range.value, true));
+    number.addEventListener('input', () => setVal(number.value, false));
+    number.addEventListener('change', () => setVal(number.value, true));
+    number.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') setVal(number.value, true);
+    });
+
+    wrap.appendChild(header);
+    wrap.appendChild(controlsRow);
+    return wrap;
 }
 
 function regenerateFromPanel(allowReframe = false) {
-  if (!currentParams) return;
-  generateAircraftPart(currentParams, { reframe: allowReframe });
+    if (!currentParams) return;
+    generateAircraftPart(currentParams, { reframe: allowReframe });
 }
 
 // ============================================
 // NLP FALLBACK FOR TYPE DETECTION
 // ============================================
 function guessPartTypeFromText(userInput) {
-  const text = String(userInput || '').toLowerCase();
+    const text = String(userInput || '').toLowerCase();
 
-  if (text.includes('wing') || text.includes('airfoil') || text.includes('delta') || text.includes('swept'))
-    return 'wing';
+    if (text.includes('wing') || text.includes('airfoil') || text.includes('delta') || text.includes('swept'))
+        return 'wing';
 
-  if (text.includes('fuselage') || text.includes('body') || text.includes('tube'))
-    return 'fuselage';
+    if (text.includes('fuselage') || text.includes('body') || text.includes('tube'))
+        return 'fuselage';
 
-  if (text.includes('stabilizer') || text.includes('tail') || text.includes('fin') || text.includes('rudder'))
-    return 'stabilizer';
+    if (text.includes('stabilizer') || text.includes('tail') || text.includes('fin') || text.includes('rudder'))
+        return 'stabilizer';
 
-  return null;
+    return null;
 }
 
 // ============================================
 // GEMINI API INTEGRATION
 // ============================================
 async function findWorkingModel(apiKey) {
-  console.log('🔍 Auto-detecting working Gemini model...');
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
-    if (!res.ok) throw new Error('Could not list models');
-    const data = await res.json();
-    for (const m of data.models || []) {
-      if (m.supportedGenerationMethods?.includes('generateContent')) {
-        return m.name.replace('models/', '');
-      }
-    }
-  } catch {}
-  const fallbacks = ['gemini-1.5-flash','gemini-1.5-pro','gemini-1.5-flash-latest','gemini-pro'];
-  for (const model of fallbacks) {
+    console.log('🔍 Auto-detecting working Gemini model...');
     try {
-      const test = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: 'test' }] }] }) }
-      );
-      if (test.ok) return model;
-    } catch {}
-  }
-  throw new Error('No working Gemini model found.');
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+        if (!res.ok) throw new Error('Could not list models');
+        const data = await res.json();
+        for (const m of data.models || []) {
+            if (m.supportedGenerationMethods?.includes('generateContent')) {
+                return m.name.replace('models/', '');
+            }
+        }
+    } catch { }
+    const fallbacks = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-latest', 'gemini-pro'];
+    for (const model of fallbacks) {
+        try {
+            const test = await fetch(
+                `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: 'test' }] }] })
+                }
+            );
+            if (test.ok) return model;
+        } catch { }
+    }
+    throw new Error('No working Gemini model found.');
 }
 
 async function callGeminiAPI(apiKey, userInput) {
-  if (!cachedWorkingModel) cachedWorkingModel = await findWorkingModel(apiKey);
-  const prompt =
-`Extract aircraft part parameters and return ONLY valid JSON.
+    if (!cachedWorkingModel) cachedWorkingModel = await findWorkingModel(apiKey);
+    const prompt =
+        `Extract aircraft part parameters and return ONLY valid JSON.
 Description: "${userInput}"
 {
   "type": "wing|fuselage|stabilizer",
@@ -475,185 +636,250 @@ Description: "${userInput}"
   "material": "carbon|titanium|aluminum|null"
 }`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1/models/${cachedWorkingModel}:generateContent?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-  );
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/${cachedWorkingModel}:generateContent?key=${apiKey}`,
+        {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        }
+    );
 
-  if (!response.ok) {
-    cachedWorkingModel = null;
-    const err = await response.json();
-    throw new Error(err.error?.message || 'Gemini API error');
-  }
+    if (!response.ok) {
+        cachedWorkingModel = null;
+        const err = await response.json();
+        throw new Error(err.error?.message || 'Gemini API error');
+    }
 
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) {
-    return { type:null, span:null, length:null, diameter:null, chord:null, sweep:null, material:null, _raw:text };
-  }
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) {
+        return { type: null, span: null, length: null, diameter: null, chord: null, sweep: null, material: null, _raw: text };
+    }
 
-  try {
-    return JSON.parse(match[0]);
-  } catch {
-    return { type:null, span:null, length:null, diameter:null, chord:null, sweep:null, material:null, _raw:text };
-  }
+    try {
+        return JSON.parse(match[0]);
+    } catch {
+        return { type: null, span: null, length: null, diameter: null, chord: null, sweep: null, material: null, _raw: text };
+    }
 }
 
 // ============================================
 // UI INTERACTIONS
 // ============================================
+
 document.getElementById('generateBtn').addEventListener('click', async function () {
-  const userInput = document.getElementById('userInput').value.trim();
-  const apiKey    = document.getElementById('apiKey').value.trim();
-  const output    = document.getElementById('output');
-  const warnSlot  = document.getElementById('warnSlot');
-
-  if (!apiKey)   return showOutputError('Please enter your API key!');
-  if (!userInput) return showOutputError('Please describe an aircraft part!');
-
-  if (warnSlot) warnSlot.innerHTML = '';
-  output.innerHTML = '<p class="loading">🤖 Analyzing description...</p>';
-
-  // persist prompt for testing
-  localStorage.setItem(LS.userInput, userInput);
-
-  this.disabled = true;
-  try {
-    let raw = await callGeminiAPI(apiKey, userInput);
-    const { params, warnings } = validateParams(raw, userInput);
-
-    showWarningsAboveParams(warnings);
-    displayParameters(params);
-    buildParamPanel(params);
-    generateAircraftPart(params, { reframe: true });
-
-    output.innerHTML += '<p class="success" style="margin-top:10px;">✓ 3D model generated successfully!</p>';
-
-    // remember params by detected type
-    const t = (params.type || '').toLowerCase();
-    if (t) {
-      const map = loadJSON(LS.paramsByType, {});
-      map[t] = params;
-      saveJSON(LS.paramsByType, map);
+    const userInput = document.getElementById('userInput').value.trim();
+    const apiKey    = document.getElementById('apiKey').value.trim();
+    const output    = document.getElementById('output');
+  
+    // fresh output box with a warn slot ready
+    output.innerHTML = '<div id="warnSlot"></div><p class="loading">🤖 Analyzing description...</p>';
+  
+    if (!apiKey)   return showOutputError('Please enter your API key!');
+    if (!userInput) return showOutputError('Please describe an aircraft part!');
+  
+    this.disabled = true;
+    try {
+      const raw = await callGeminiAPI(apiKey, userInput);
+      const { params, warnings } = validateParams(raw, userInput);
+  
+      resetParamPanel();                    // clear sliders
+      showWarningsAboveParams(warnings);    // write warnings into #warnSlot
+      displayParameters(params, true);      // replace params section below (see new function below)
+      buildParamPanel(params);              // rebuild sliders
+      generateAircraftPart(params, { reframe: true });
+  
+      showOutputSuccess('✓ 3D model generated successfully!');
+    } catch (err) {
+      showOutputError(err.message);
     }
-  } catch (err) {
-    showOutputError(err.message);
-  }
-  this.disabled = false;
-});
+    this.disabled = false;
+});  
 
 document.querySelectorAll('.example-chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    document.getElementById('userInput').value = chip.dataset.example;
-  });
-});
+    chip.addEventListener('click', () => {
+      const output = document.getElementById('output');
+      output.innerHTML = '<div id="warnSlot"></div>';   // fresh output
+  
+      const paramsStr = chip.dataset.params;
+      if (!paramsStr) {
+        // fallback: just seed the textarea, but don’t run the model
+        document.getElementById('userInput').value = chip.dataset.example || '';
+        showOutputSuccess('Preset applied to description. Press "Generate 3D Part" to build.');
+        return;
+      }
+  
+      let raw; try { raw = JSON.parse(paramsStr); } catch { return; }
+      // IMPORTANT: ignore any saved textarea when using structured preset
+      document.getElementById('userInput').value = '';
+  
+      const { params, warnings } = validateParams(raw, chip.textContent || '');
+      resetParamPanel();
+      showWarningsAboveParams(warnings);
+      displayParameters(params, true);
+      buildParamPanel(params);
+      generateAircraftPart(params, { reframe: true });
+    });
+});  
 
 // Append-only helpers for the output box
 function showOutputError(msg) {
-  const output = document.getElementById('output');
-  output.innerHTML += `<p class="error">❌ ${msg}</p>`;
+    const output = document.getElementById('output');
+    output.innerHTML += `<p class="error">❌ ${msg}</p>`;
 }
 function showOutputSuccess(msg) {
-  const output = document.getElementById('output');
-  output.innerHTML += `<p class="success">✅ ${msg}</p>`;
+    const output = document.getElementById('output');
+    output.innerHTML += `<p class="success">✅ ${msg}</p>`;
 }
-function displayParameters(params) {
-  const output = document.getElementById('output');
-  let html = '<h4 class="success">✓ Extracted Parameters:</h4>';
-  html += '<div class="params-box">';
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== null && v !== undefined && k !== '_raw') {
-      html += `<div class="param-item"><strong>${k}:</strong> ${v}</div>`;
+function resetOutput(msg = '') {
+    const output = document.getElementById('output');
+    output.innerHTML = msg;
+}  
+function displayParameters(params, replace=false) {
+    const output = document.getElementById('output');
+    const html = (() => {
+      let s = '<h4 class="success">✓ Extracted Parameters:</h4><div class="params-box">';
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== null && v !== undefined && k !== '_raw') {
+          s += `<div class="param-item"><strong>${k}:</strong> ${v}</div>`;
+        }
+      }
+      return s + '</div>';
+    })();
+  
+    if (replace) {
+      // keep the warn slot, replace everything after it
+      const warn = document.getElementById('warnSlot');
+      output.innerHTML = '';
+      if (warn) output.appendChild(warn);
+      output.insertAdjacentHTML('beforeend', html);
+    } else {
+      output.insertAdjacentHTML('beforeend', html);
     }
-  }
-  html += '</div>';
-  output.innerHTML += html;
+}  
+function clearUI() {
+    const output = document.getElementById('output');
+    const warnSlot = document.getElementById('warnSlot');
+    const panel = document.getElementById('paramPanel');
+    if (output) output.innerHTML = '';
+    if (warnSlot) warnSlot.innerHTML = '';
+    if (panel) panel.classList.add('hidden');
 }
+function clearOutput() {
+    const output = document.getElementById('output');
+    output.innerHTML = '<div id="warnSlot"></div>';
+}
+function resetParamPanel() {
+    const panel = document.getElementById('paramPanel');
+    const ctrl  = document.getElementById('paramControls');
+    if (panel && ctrl) { ctrl.innerHTML = ''; panel.classList.add('hidden'); }
+}
+  
 
 // ============================================
 // EXPORT DROPDOWN + EXPORTERS
 // ============================================
 const dropdownBtn = document.getElementById('exportDropdownBtn');
-const exportMenu  = document.getElementById('exportMenu');
+const exportMenu = document.getElementById('exportMenu');
 
 dropdownBtn.addEventListener('click', () => {
-  exportMenu.style.display = exportMenu.style.display === 'block' ? 'none' : 'block';
+    exportMenu.style.display = exportMenu.style.display === 'block' ? 'none' : 'block';
 });
 window.addEventListener('click', (e) => {
-  if (!e.target.closest('.export-dropdown')) exportMenu.style.display = 'none';
+    if (!e.target.closest('.export-dropdown')) exportMenu.style.display = 'none';
 });
 
 document.getElementById('exportGLTF').addEventListener('click', () => {
-  exportMenu.style.display = 'none';
-  if (!currentMesh) return showOutputError('No model to export!');
-  const exporter = new THREE.GLTFExporter();
-  exporter.parse(currentMesh, (gltf) => {
-    const blob = new Blob([JSON.stringify(gltf)], { type: 'model/gltf+json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'aircraft_part.gltf'; a.click();
-    URL.revokeObjectURL(url);
-    showOutputSuccess('Model exported as GLTF successfully!');
-  });
+    exportMenu.style.display = 'none';
+    if (!currentMesh) return showOutputError('No model to export!');
+    const exporter = new THREE.GLTFExporter();
+    exporter.parse(currentMesh, (gltf) => {
+        const blob = new Blob([JSON.stringify(gltf)], { type: 'model/gltf+json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'aircraft_part.gltf'; a.click();
+        URL.revokeObjectURL(url);
+        showOutputSuccess('Model exported as GLTF successfully!');
+    });
 });
 
 document.getElementById('exportSTL').addEventListener('click', () => {
-  exportMenu.style.display = 'none';
-  if (!currentMesh) return showOutputError('No model to export!');
-  const exporter = new THREE.STLExporter();
-  const stl = exporter.parse(currentMesh);
-  const blob = new Blob([stl], { type: 'application/vnd.ms-pki.stl' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'aircraft_part.stl'; a.click();
-  URL.revokeObjectURL(url);
-  showOutputSuccess('Model exported as STL successfully!');
+    exportMenu.style.display = 'none';
+    if (!currentMesh) return showOutputError('No model to export!');
+    const exporter = new THREE.STLExporter();
+    const stl = exporter.parse(currentMesh);
+    const blob = new Blob([stl], { type: 'application/vnd.ms-pki.stl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'aircraft_part.stl'; a.click();
+    URL.revokeObjectURL(url);
+    showOutputSuccess('Model exported as STL successfully!');
 });
+
+document.getElementById('exportGLB').addEventListener('click', () => {
+    if (!currentMesh) return showOutputError('No model to export!');
+    const exporter = new THREE.GLTFExporter();
+    const options = { binary: true, includeCustomExtensions: true };
+    exporter.parse(currentMesh, (glb) => {
+        const blob = new Blob([glb], { type: 'model/gltf-binary' });
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement('a'), { href: url, download: 'aircraft_part.glb' });
+        a.click();
+        URL.revokeObjectURL(url);
+        showOutputSuccess('Model exported as GLB successfully!');
+    }, options);
+});
+
 
 // ============================================
 // API KEY / PROMPT PERSISTENCE (TESTING ONLY)
 // ============================================
 function hydrateTestingState() {
-  const rememberKeyEl = document.getElementById('rememberKey');
-  const apiKeyEl      = document.getElementById('apiKey');
-  const userInputEl   = document.getElementById('userInput');
+    const rememberKeyEl = document.getElementById('rememberKey');
+    const apiKeyEl = document.getElementById('apiKey');
+    const userInputEl = document.getElementById('userInput');
 
-  const rememberFlag  = loadJSON(LS.rememberFlag, false);
-  rememberKeyEl.checked = !!rememberFlag;
+    const rememberFlag = loadJSON(LS.rememberFlag, false);
+    rememberKeyEl.checked = !!rememberFlag;
 
-  if (rememberFlag) {
-    const savedKey = localStorage.getItem(LS.apiKey);
-    if (savedKey) apiKeyEl.value = savedKey;
-  }
-  const savedPrompt = localStorage.getItem(LS.userInput);
-  if (savedPrompt) userInputEl.value = savedPrompt;
-
-  // listeners
-  apiKeyEl.addEventListener('input', (e) => {
-    const remember = rememberKeyEl.checked;
-    if (remember) localStorage.setItem(LS.apiKey, e.target.value.trim());
-  });
-  rememberKeyEl.addEventListener('change', (e) => {
-    const on = e.target.checked;
-    saveJSON(LS.rememberFlag, on);
-    if (!on) removeKeys(LS.apiKey);
-    else {
-      const v = apiKeyEl.value.trim();
-      if (v) localStorage.setItem(LS.apiKey, v);
+    if (rememberFlag) {
+        const savedKey = localStorage.getItem(LS.apiKey);
+        if (savedKey) apiKeyEl.value = savedKey;
     }
-  });
-  userInputEl.addEventListener('input', (e) => {
-    localStorage.setItem(LS.userInput, e.target.value);
-  });
 
-  const clearBtn = document.getElementById('clearSaved');
-  clearBtn.addEventListener('click', () => {
-    removeKeys(LS.rememberFlag, LS.apiKey, LS.userInput, LS.paramsByType);
-    rememberKeyEl.checked = false;
-    apiKeyEl.value = '';
-    showOutputSuccess('Cleared saved testing data.');
-  });
+    // listeners
+    apiKeyEl.addEventListener('input', (e) => {
+        const remember = rememberKeyEl.checked;
+        if (remember) localStorage.setItem(LS.apiKey, e.target.value.trim());
+    });
+    rememberKeyEl.addEventListener('change', (e) => {
+        const on = e.target.checked;
+        saveJSON(LS.rememberFlag, on);
+        if (!on) removeKeys(LS.apiKey);
+        else {
+            const v = apiKeyEl.value.trim();
+            if (v) localStorage.setItem(LS.apiKey, v);
+        }
+    });
+    userInputEl.addEventListener('input', (e) => {
+        localStorage.setItem(LS.userInput, e.target.value);
+    });
+
+    const clearBtn = document.getElementById('clearSaved');
+    clearBtn.addEventListener('click', () => {
+        removeKeys(LS.rememberFlag, LS.apiKey, LS.userInput, LS.paramsByType);
+        rememberKeyEl.checked = false;
+        apiKeyEl.value = '';
+        showOutputSuccess('Cleared saved testing data.');
+    });
+}
+
+const autorotateEl = document.getElementById('toggleAutorotate');
+if (autorotateEl) {
+    autorotateEl.addEventListener('change', (e) => {
+        autorotate = !!e.target.checked;
+        showOutputSuccess(`Auto-rotate ${autorotate ? 'enabled' : 'disabled'}.`);
+    });
 }

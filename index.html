@@ -18,74 +18,88 @@
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <div class="container">
-    <!-- LEFT PANEL: Controls -->
-    <div class="left-panel">
-      <h1>✈️ AI Aircraft Generator</h1>
-      <p class="subtitle">Natural Language to 3D Aircraft Parts</p>
+    <div class="container">
+        <!-- LEFT PANEL: Controls -->
+        <div class="left-panel">
+        <h1>✈️ AI Aircraft Generator</h1>
+        <p class="subtitle">Natural Language to 3D Aircraft Parts</p>
 
-      <!-- API Key Input -->
-      <div class="input-group">
-        <label for="apiKey">Gemini API Key:</label>
-        <input type="text" id="apiKey" placeholder="Paste your API key here"/>
-      </div>
-
-      <div class="input-group" style="margin-top:6px;">
-        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
-          <input type="checkbox" id="rememberKey"/>
-          Remember API key on this device (testing only)
-        </label>
-        <button id="clearSaved" style="margin-top:8px; background:#555;">Clear saved data</button>
-      </div>
-
-      <!-- Description Input -->
-      <div class="input-group">
-        <label for="userInput">Describe Your Aircraft Part:</label>
-        <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep angle, 12 meter span"></textarea>
-      </div>
-
-      <!-- Generate Button -->
-      <button id="generateBtn">Generate 3D Part</button>
-
-      <!-- Export Dropdown -->
-      <div class="export-dropdown">
-        <button id="exportDropdownBtn">Export Model ▾</button>
-        <div id="exportMenu" class="export-menu">
-          <div class="export-item" id="exportGLTF">Export as GLTF (.gltf)</div>
-          <div class="export-item" id="exportSTL">Export as STL (.stl)</div>
+        <!-- API Key Input -->
+        <div class="input-group">
+            <label for="apiKey">Gemini API Key:</label>
+            <input type="text" id="apiKey" placeholder="Paste your API key here"/>
         </div>
-      </div>
 
-      <!-- Universal Parameter Panel (auto-fills per part type) -->
-      <div id="paramPanel" class="param-panel hidden">
-        <h3 style="margin-bottom:10px;">Parameters</h3>
-        <div id="paramControls"></div>
-      </div>
+        <div class="input-group" style="margin-top:6px;">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+            <input type="checkbox" id="rememberKey"/>
+            Remember API key on this device (testing only)
+            </label>
+            <button id="clearSaved" style="margin-top:8px; background:#555;">Clear saved data</button>
+        </div>
 
-      <!-- Example Prompts -->
-      <div style="margin-top: 15px;">
-        <label>💡 Try These Examples:</label>
-        <div class="example-chip" data-example="swept wing with 35 degree sweep, 12 meter span">Swept Wing</div>
-        <div class="example-chip" data-example="delta wing with 45 degree sweep">Delta Wing</div>
-        <div class="example-chip" data-example="fuselage 8 meters long, 2 meter diameter">Fuselage</div>
-        <div class="example-chip" data-example="vertical stabilizer 4 meters tall">Vertical Stabilizer</div>
-      </div>
+        <!-- Description Input -->
+        <div class="input-group">
+            <label for="userInput">Describe Your Aircraft Part:</label>
+            <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep angle, 12 meter span"></textarea>
+        </div>
 
-      <!-- Output Display -->
-      <div id="output">
-        <div id="warnSlot"></div>
-        <p>Enter a description and generate your aircraft part!</p>
-      </div>
+        <!-- Generate Button -->
+        <button id="generateBtn">Generate 3D Part</button>
+
+        <!-- Auto-rotate Toggle -->
+        <div class="input-group" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="toggleAutorotate" checked />
+            <label for="toggleAutorotate" style="margin:0;font-weight:600;">Auto-rotate</label>
+        </div>
+
+        <!-- Export Dropdown -->
+        <div class="export-dropdown">
+            <button id="exportDropdownBtn">Export Model ▾</button>
+                <div id="exportMenu" class="export-menu">
+                <div class="export-item" id="exportGLTF">Export as GLTF (.gltf)</div>
+                <div class="export-item" id="exportSTL">Export as STL (.stl)</div>
+                <div class="export-item" id="exportGLB">Export as GLB (.glb)</div>
+            </div>
+        </div>
+
+        <!-- Universal Parameter Panel (auto-fills per part type) -->
+        <div id="paramPanel" class="param-panel hidden">
+            <h3 style="margin-bottom:10px;">Parameters</h3>
+            <div id="paramControls"></div>
+        </div>
+
+        <!-- Example Prompts -->
+        <div style="margin-top: 15px;">
+            <label>💡 Try These Examples:</label>
+            <div class="example-chip"
+                data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
+
+            <div class="example-chip"
+                data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
+
+            <div class="example-chip"
+                data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
+
+            <div class="example-chip"
+                data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
+        </div>
+
+        <!-- Output Display -->
+        <div id="output">
+            <div id="warnSlot"></div>
+            <p>Enter a description and generate your aircraft part!</p>
+        </div>
+        </div>
+
+        <!-- RIGHT PANEL: 3D Viewer -->
+        <div class="right-panel">
+        <h1>3D Viewer</h1>
+        <div id="viewer">
+            <div class="viewer-label">🎮 Auto-rotating | 3D model will appear here</div>
+        </div>
+        </div>
     </div>
-
-    <!-- RIGHT PANEL: 3D Viewer -->
-    <div class="right-panel">
-      <h1>3D Viewer</h1>
-      <div id="viewer">
-        <div class="viewer-label">🎮 Auto-rotating | 3D model will appear here</div>
-      </div>
-    </div>
-  </div>
 
   <!-- App Script -->
   <script src="script.js"></script>
