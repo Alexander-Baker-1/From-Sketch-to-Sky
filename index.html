@@ -9,6 +9,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Load OrbitControls.js library from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+    <!-- Load GLTFExporter.js library from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/GLTFExporter.js"></script>
+    <!-- Load STLExporter.js library from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/STLExporter.js"></script>
     
     <!-- Link to our CSS file -->
     <link rel="stylesheet" href="style.css">
@@ -34,6 +38,15 @@
             
             <!-- Generate Button -->
             <button id="generateBtn">Generate 3D Part</button>
+
+            <!-- Export Dropdown -->
+            <div class="export-dropdown">
+                <button id="exportDropdownBtn">Export Model ▾</button>
+                <div id="exportMenu" class="export-menu">
+                    <div class="export-item" id="exportGLTF">Export as GLTF (.gltf)</div>
+                    <div class="export-item" id="exportSTL">Export as STL (.stl)</div>
+                </div>
+            </div>
             
             <!-- Example Prompts -->
             <div style="margin-top: 15px;">
