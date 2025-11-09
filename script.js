@@ -6,6 +6,7 @@ let cachedWorkingModel = null;
 let currentParams = null;      // last validated params
 let suppressReframe = false;   // avoid camera jumps during slider drag
 let autorotate = true; // top-level state
+let pivot; // persistent parent that carries rotation
 
 function fix(v) {
     return Number(v.toFixed(3));
@@ -63,10 +64,6 @@ function safeRemove(object) {
     if (!object) return;
     object?.traverse?.((o) => {
         if (o.geometry) o.geometry.dispose();
-        if (o.material) {
-            if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
-            else o.material.dispose();
-        }
     });
     scene.remove(object);
 }
@@ -113,6 +110,9 @@ function initThreeJS() {
     scene.add(new THREE.GridHelper(20, 20, 0x888888, 0xcccccc));
     scene.add(new THREE.AxesHelper(5));
 
+    pivot = new THREE.Object3D();
+    scene.add(pivot);
+
     // Resize + loop
     window.addEventListener('resize', onWindowResize);
     animate();
@@ -127,10 +127,10 @@ function initThreeJS() {
 
 function animate() {
     requestAnimationFrame(animate);
-    if (currentMesh && autorotate) currentMesh.rotation.y += 0.005;
+    if (pivot && autorotate) pivot.rotation.y += 0.005;
     controls?.update();
     renderer.render(scene, camera);
-}
+}  
 
 function onWindowResize() {
     const container = document.getElementById('viewer');
@@ -146,104 +146,106 @@ function onWindowResize() {
 // ============================================
 
 function generateAircraftPart(params, options = {}) {
-    // options: { reframe?: boolean }
+    // default flags
+    const { reframe = false } = options;
+  
+    if (!pivot) {
+      // safety: create pivot if not yet created
+      pivot = new THREE.Object3D();
+      scene.add(pivot);
+    }
+  
+    // Remove previous mesh child(ren) from pivot but keep pivot itself (and its rotation!)
+    if (currentMesh) {
+      // remove wireframe if we added one as a child
+      currentMesh.parent && currentMesh.parent.remove(currentMesh);
+      safeRemove(currentMesh); // dispose geometry
+      currentMesh = null;
+    }
+
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xb0b0b0,    // soft metallic silver
+        metalness: 0.85,    // high reflectivity
+        roughness: 0.25,    // slightly glossy
+    });       
+  
+    // --- Geometry by type ---
     const partType = (params.type || 'unknown').toLowerCase();
-
-    // --- 1) Pick material (we'll reuse the existing mesh & just update color) ---
-    const materialColor =
-        params.material?.includes('carbon')   ? 0x222222 :
-        params.material?.includes('titanium') ? 0xcccccc :
-        params.material?.includes('aluminum') ? 0xaaaaaa : 0x4488ff;
-
-    // --- 2) Build fresh geometry for the selected part (sweep only warps vertices; no rotations here) ---
     let geometry;
-    if (partType.includes('wing'))           geometry = createWing(params);
-    else if (partType.includes('fuselage'))  geometry = createFuselage(params);
-    else if (partType.includes('stabilizer'))geometry = createStabilizer(params);
-    else                                     geometry = new THREE.BoxGeometry(3, 1, 6);
-
+    if (partType.includes('wing'))         geometry = createWing(params);
+    else if (partType.includes('fuselage'))geometry = createFuselage(params);
+    else if (partType.includes('stabilizer')) geometry = createStabilizer(params);
+    else geometry = new THREE.BoxGeometry(3, 1, 6);
+  
     geometry.computeVertexNormals();
-
-    // Keep a stable pivot: center the geometry about its own bounding-box center
+  
+    // --- Center geometry so it spins about its own centroid (no apparent “orbit”) ---
     geometry.computeBoundingBox();
-    const center = new THREE.Vector3();
-    geometry.boundingBox.getCenter(center);
-    geometry.translate(-center.x, -center.y, -center.z);
-
-    // --- 3) Create mesh once; afterwards just swap geometry to avoid rotation resets ---
-    if (!currentMesh) {
-        currentMesh = new THREE.Mesh(
-            geometry,
-            new THREE.MeshStandardMaterial({ color: materialColor, metalness: 0.7, roughness: 0.3 })
-        );
-        scene.add(currentMesh);
-    } else {
-        // Preserve world rotation/position/scale automatically by reusing the mesh
-        if (currentMesh.geometry) currentMesh.geometry.dispose();
-        currentMesh.geometry = geometry;
-        // Update material color without recreating the material
-        if (currentMesh.material && currentMesh.material.color) {
-            currentMesh.material.color.setHex(materialColor);
-        }
-
-        // Remove & dispose previous wireframe if present
-        if (currentMesh.userData._wire) {
-            const old = currentMesh.userData._wire;
-            currentMesh.remove(old);
-            if (old.geometry) old.geometry.dispose();
-            if (old.material) old.material.dispose();
-            currentMesh.userData._wire = null;
-        }
+    const c = new THREE.Vector3();
+    geometry.boundingBox.getCenter(c);
+    geometry.translate(-c.x, -c.y, -c.z);
+  
+    // Build mesh and attach to pivot (pivot holds rotation forever)
+    currentMesh = new THREE.Mesh(geometry);
+    pivot.add(currentMesh);
+  
+    // Wireframe overlay (attached to mesh so it gets disposed with it)
+    const wf = new THREE.LineSegments(
+        new THREE.WireframeGeometry(geometry),
+        new THREE.LineBasicMaterial({
+            color: 0x000000,
+            linewidth: 1,
+            transparent: true,
+            opacity: 0.25,
+        })
+    );
+    currentMesh.add(wf);    
+  
+    // Optional reframe (won’t impact pivot rotation)
+    if (reframe && !suppressReframe) {
+      frameObject(currentMesh, camera, controls);
     }
-
-    // --- 4) Wireframe overlay (fresh each time) ---
-    const wf = new THREE.LineSegments(new THREE.WireframeGeometry(currentMesh.geometry));
-    wf.material.transparent = true;
-    wf.material.opacity = 0.15;
-    currentMesh.add(wf);
-    currentMesh.userData._wire = wf;
-
-    // --- 5) Optional reframe (never during live drag if you’re setting suppressReframe=true elsewhere) ---
-    if (options.reframe === true && !suppressReframe) {
-        frameObject(currentMesh, camera, controls);
-    }
-}
+  
+    console.log('✓ Aircraft part generated!');
+}  
 
 function createWing(params) {
-    const b      = coerce(params.span, 10);               // span (full)
-    const cr     = coerce(params.rootChord, 2);           // root chord
-    const ct     = coerce(params.tipChord, 1);            // tip chord
-    const sweepD = coerce(params.sweep, 0);               // leading-edge sweep (deg)
+    const b      = coerce(params.span, 10);        // span (full)
+    const cr     = coerce(params.rootChord, 2);    // root chord
+    const ct     = coerce(params.tipChord, 1);     // tip chord
+    const sweepD = coerce(params.sweep, 0);        // leading-edge sweep (deg)
     const naca   = (params.naca || '').trim();
   
-    // 2D airfoil at UNIT chord in X–Y (0..1 in x), thickness in ±Y
-    const baseShape = isValidNaca4(naca) ? makeNaca4Shape(naca, 1, 200) : makeNaca4Shape('0012', 1, 200);
+    // 2D airfoil at unit chord in X–Y (0..1 in X), thickness in ±Y
+    const baseShape = isValidNaca4(naca) ? makeNaca4Shape(naca, 1, 200)
+                                         : makeNaca4Shape('0012', 1, 200);
   
-    // Linear extrude along +Z with depth=b, then center to [-b/2, +b/2]
-    const geo = new THREE.ExtrudeGeometry(baseShape, { steps: 60, depth: b, bevelEnabled: false });
+    // Extrude along +Z with depth = b, then center Z to [-b/2, +b/2]
+    const geo = new THREE.ExtrudeGeometry(baseShape, { steps: 80, depth: b, bevelEnabled: false });
     geo.translate(0, 0, -b / 2);
   
-    // Warp vertices to apply taper + sweep LE (no rotation)
-    const tanL = Math.tan(sweepD * Math.PI / 180); // Λ_LE
+    // Apply taper and leading-edge sweep as a pure X-shear/scale; Z is untouched
+    const tanL = Math.tan((sweepD * Math.PI) / 180); // sweep tangent
     const pos = geo.attributes.position;
   
     for (let i = 0; i < pos.count; i++) {
       let x = pos.getX(i);
       let y = pos.getY(i);
-      let z = pos.getZ(i);                 // z ∈ [-b/2, +b/2]
+      const z = pos.getZ(i);             // z ∈ [-b/2, +b/2] (span axis)
   
-      const u  = (z + b / 2) / b;          // 0 at root, 1 at tip
-      const c  = cr + (ct - cr) * u;       // chord at this span station
-      const xLE = (z + b / 2) * tanL;      // leading edge offset
+      const u   = (z + b / 2) / b;       // 0 at root, 1 at tip
+      const c   = cr + (ct - cr) * u;    // chord at this span station
+      const xLE = (z + b / 2) * tanL;    // leading-edge offset
   
-      // Scale about the LE so LE follows xLE and thickness scales with chord
-      x = x * c + xLE;                     // x in [0,c] shifted by sweep
-      y = y * c;                           // thickness scales with chord
+      // Scale about LE: x∈[0,1] → [0,c], then shift by xLE. y scales with c.
+      x = x * c + xLE;
+      y = y * c;
   
       pos.setX(i, x);
       pos.setY(i, y);
-      // z stays the same (no rotate/shear)
+      // Z stays exactly the same — no rotation, no z-scale
     }
+  
     pos.needsUpdate = true;
     geo.computeVertexNormals();
     return geo;
@@ -368,18 +370,6 @@ function validateParams(raw, userInput) {
     const nacaInText = (userInput.match(/naca\s*[-\s]*(\d{4})/i) || [])[1];
     if (!params.naca && nacaInText) {
         params.naca = nacaInText;  // auto-assign from description
-    }
-
-    // --- material ---
-    const allowedMaterials = ['carbon', 'titanium', 'aluminum'];
-    if (typeof params.material === 'string') {
-        const m = params.material.toLowerCase();
-        params.material = allowedMaterials.includes(m) ? m : null;
-    } else {
-        params.material = null;
-    }
-    if (!params.material) {
-        params.material = 'aluminum';
     }
 
     // --- parse a size from text and map to primary dimension if needed ---
@@ -507,18 +497,18 @@ function buildParamPanel(params) {
 
     const defsByType = {
         wing: [
-            { key: 'span',       label: 'Span (m)',        min: 0.5, max: 100, step: 0.1, value: coerce(params.span, 10) },
-            { key: 'rootChord',  label: 'Root chord (m)',  min: 0.1, max: 10,  step: 0.1, value: coerce(params.rootChord, 2) },
-            { key: 'tipChord',   label: 'Tip chord (m)',   min: 0.05,max: 10,  step: 0.1, value: coerce(params.tipChord, 1) },
-            { key: 'sweep',      label: 'LE Sweep (°)',    min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) },
+            { key: 'span',       label: 'Span (m)',        min: 0.5, max: 100, step: 0.1, value: fix(coerce(params.span, 10)) },
+            { key: 'rootChord',  label: 'Root chord (m)',  min: 0.1, max: 10,  step: 0.1, value: fix(coerce(params.rootChord, 2)) },
+            { key: 'tipChord',   label: 'Tip chord (m)',   min: 0.05,max: 10,  step: 0.1, value: fix(coerce(params.tipChord, 1)) },
+            { key: 'sweep',      label: 'LE Sweep (°)',    min: 0,   max: 60,  step: 1,   value: fix(coerce(params.sweep, 0)) },
         ],
         fuselage: [
-            { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: coerce(params.length, 8) },
-            { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10,  step: 0.1, value: coerce(params.diameter, 2) }
+            { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: fix(coerce(params.length, 8)) },
+            { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10,  step: 0.1, value: fix(coerce(params.diameter, 2)) }
         ],
         stabilizer: [
-            { key: 'span',  label: 'Span (m)',   min: 0.5, max: 30, step: 0.1, value: coerce(params.span, 4) },
-            { key: 'sweep', label: 'Sweep (°)',  min: 0,   max: 60, step: 1,   value: coerce(params.sweep, 0) }
+            { key: 'span',  label: 'Span (m)',   min: 0.5, max: 30, step: 0.1, value: fix(coerce(params.span, 4)) },
+            { key: 'sweep', label: 'Sweep (°)',  min: 0,   max: 60, step: 1,   value: fix(coerce(params.sweep, 0)) }
         ]
     };
 
@@ -565,31 +555,6 @@ function buildParamPanel(params) {
         wrap.appendChild(input);
         ctrl.appendChild(wrap);
     }
-
-    // ✅ Material dropdown
-    const matWrap = document.createElement("div");
-    matWrap.className = "slider-row";
-
-    const matLabel = document.createElement("label");
-    matLabel.textContent = "Material";
-    matLabel.style.display = "block";
-
-    const matSelect = document.createElement("select");
-    ["aluminum","carbon","titanium"].forEach(m=>{
-        const opt=document.createElement("option");
-        opt.value=m;
-        opt.textContent=m[0].toUpperCase()+m.slice(1);
-        matSelect.appendChild(opt);
-    });
-    matSelect.value = params.material || "aluminum";
-    matSelect.addEventListener("change", ()=>{
-        currentParams.material = matSelect.value;
-        regenerateFromPanel(false);
-    });
-
-    matWrap.appendChild(matLabel);
-    matWrap.appendChild(matSelect);
-    ctrl.appendChild(matWrap);
 
     panel.classList.remove("hidden");
 }
@@ -656,7 +621,7 @@ function makeSlider({ key, label, min, max, step, value }) {
         if (!Number.isFinite(parsed)) return;
 
         currentParams[key] = parsed;
-        number.value = parsed;
+        number.value = parsed.toFixed(3);
         document.getElementById(`${id}_val`).textContent = parsed.toFixed(3);
 
         // ✅ Update aerodynamic metrics live (only for wing)
@@ -762,7 +727,6 @@ Description: "${userInput}"
   "diameter": number|null,
   "chord":  number|null,
   "sweep":  number|null,
-  "material": "carbon|titanium|aluminum|null"
 }`;
 
     const response = await fetch(
@@ -784,13 +748,13 @@ Description: "${userInput}"
 
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) {
-        return { type: null, span: null, length: null, diameter: null, chord: null, sweep: null, material: null, _raw: text };
+        return { type: null, span: null, length: null, diameter: null, chord: null, sweep: null, _raw: text };
     }
 
     try {
         return JSON.parse(match[0]);
     } catch {
-        return { type: null, span: null, length: null, diameter: null, chord: null, sweep: null, material: null, _raw: text };
+        return { type: null, span: null, length: null, diameter: null, chord: null, sweep: null, _raw: text };
     }
 }
 
@@ -870,13 +834,12 @@ function displayParameters(params, replace = false) {
     const output = document.getElementById('output');
     const prettyKey = (k) => {
         if (k === 'naca') return 'NACA';
-        if (k === 'material') return 'Material';
         return k;
     };
     let s = '<h4 class="success">✓ Extracted Parameters:</h4><div class="params-box">';
     for (const [k, v] of Object.entries(params)) {
         if (v !== null && v !== undefined && k !== '_raw') {
-            s += `<div class="param-item"><strong>${prettyKey(k)}:</strong> ${v}</div>`;
+            s += `<div class="param-item"><strong>${prettyKey(k)}:</strong> ${Number(v).toFixed(3)}</div>`;
         }
     }
     s += '</div>';
