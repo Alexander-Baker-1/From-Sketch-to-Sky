@@ -1,3 +1,11 @@
+/* ============================================================
+   SkyForge — AI-Assisted 3D Aircraft Generator
+   Hackathon Project 2025
+   Author: Alexander Baker
+   Description:
+   Natural-language → validated parameters → 3D aircraft geometry
+   ============================================================ */
+
 // ============================================
 // GLOBAL STATE
 // ============================================
@@ -72,6 +80,8 @@ function safeRemove(object) {
 // THREE.JS SETUP - 3D GRAPHICS ENGINE
 // ============================================
 window.addEventListener('load', initThreeJS);
+
+console.log("🛠️ SkyForge initialized.");
 
 function initThreeJS() {
     console.log('🎨 Initializing Three.js...');
@@ -564,7 +574,8 @@ function generateDesignReport() {
     let report = `
 ╔═══════════════════════════════════════════════════════════════╗
 ║        AIRCRAFT COMPONENT DESIGN REPORT                       ║
-║        AI-Assisted 3D Aircraft Design System                  ║
+║        Project: SkyForge                                      ║
+║        AI-Assisted 3D Aircraft Design System                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 Generated: ${dateStr}

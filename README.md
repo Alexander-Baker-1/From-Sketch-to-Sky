@@ -1,10 +1,10 @@
 # ✈️ AI Aircraft Generator
 
-Natural Language to 3D Aircraft Design - Built for Hack-Nation Global AI Hackathon 2025
+SkyForge - Natural Language to 3D Aircraft Design - Built for Hack-Nation Global AI Hackathon 2025
 
 ## 🎯 What It Does
 
-AI Aircraft Generator transforms natural language descriptions into professional 3D aircraft components using Google Gemini AI. Simply describe what you want - "swept wing with 35 degree sweep, 12 meter span" - and watch it generate aerospace-grade 3D models with real NACA airfoil profiles.
+SkyForge transforms natural language descriptions into professional 3D aircraft components using Google Gemini AI. Simply describe what you want - "swept wing with 35 degree sweep, 12 meter span" - and watch it generate aerospace-grade 3D models with real NACA airfoil profiles.
 
 ## ✨ Features
 
