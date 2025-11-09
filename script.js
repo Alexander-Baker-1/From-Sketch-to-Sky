@@ -742,7 +742,7 @@ function buildParamPanel(params) {
     currentParams = { ...params };
 
     const ctrl = document.getElementById("paramControls");
-    const paramPanelFloating  = document.getElementById("paramPanelFloating");
+    const paramPanelFloating = document.getElementById("paramPanelFloating");
 
     if (!ctrl || !paramPanelFloating) return;
 
@@ -775,6 +775,9 @@ function buildParamPanel(params) {
 
     sliders.forEach(def => ctrl.appendChild(makeSlider(def)));
 
+    // ✅ Get aeroPanel ONCE at the top
+    const aeroPanel = document.getElementById("aeroPanelFloating");
+
     // ✅ NACA for wings
     if (type.includes("wing")) {
         const wrap = document.createElement("div");
@@ -793,19 +796,17 @@ function buildParamPanel(params) {
             regenerateFromPanel(true);
         });
 
+        // Update aero metrics and show panel for wings
         updateAeroMetricsFromParams(params);
-        const aeroPanel = document.getElementById("aeroPanelFloating");
-
-        if (type.includes("wing")) {
+        if (aeroPanel) {
             aeroPanel.classList.remove("hidden");
-            updateAeroMetricsFromParams(params);
-        } else {
-            aeroPanel.classList.add("hidden");
         }
     } 
     else {
-        // hide aero metrics entirely for non wings
-        document.querySelector("#paramPanelFloating .panel-section:nth-child(2)").classList.add("hidden");
+        // Hide aero panel for non-wings
+        if (aeroPanel) {
+            aeroPanel.classList.add("hidden");
+        }
     }
 }
 
@@ -1044,36 +1045,71 @@ document.getElementById('generateBtn').addEventListener('click', async function 
 
 document.querySelectorAll('.example-chip').forEach(chip => {
     chip.addEventListener('click', () => {
+        console.log('🔘 Preset clicked:', chip.textContent);
+        
+        // Clear output and safety checks
         const output = document.getElementById('output');
-        output.innerHTML = '<div id="warnSlot"></div>';   // fresh output
+        const safetyChecks = document.getElementById('safetyChecks');
+        
+        output.innerHTML = '<div id="warnSlot"></div>';
+        safetyChecks.innerHTML = '<h4>🛡️ Safety Validation</h4><p style="color:#999; font-size:12px;">Analyzing preset...</p>';
 
         const paramsStr = chip.dataset.params;
         if (!paramsStr) {
-            // fallback: just seed the textarea, but don’t run the model
+            // Fallback: just seed the textarea
             document.getElementById('userInput').value = chip.dataset.example || '';
             showOutputSuccess('Preset applied to description. Press "Generate 3D Part" to build.');
             return;
         }
 
-        let raw; try { raw = JSON.parse(paramsStr); } catch { return; }
-        // IMPORTANT: ignore any saved textarea when using structured preset
+        // Parse the preset parameters
+        let raw;
+        try {
+            raw = JSON.parse(paramsStr);
+            console.log('📋 Parsed params:', raw);
+        } catch (e) {
+            console.error('❌ Failed to parse params:', e);
+            showOutputError('Invalid preset configuration');
+            return;
+        }
+
+        // Clear textarea when using structured preset
         document.getElementById('userInput').value = '';
 
+        // Validate parameters
         const { params, warnings } = validateParams(raw, chip.textContent || '');
+        console.log('✓ Validated params:', params);
+        
+        // Reset and show param panels
         resetParamPanel();
         showWarningsAboveParams(warnings);
         displayParameters(params, true);
 
-        document.getElementById("paramPanelFloating").style.display = "block";
-        document.getElementById("aeroPanelFloating").style.display =
-        params.type.includes("wing") ? "block" : "none";
+        // Show/hide appropriate panels
+        const paramPanel = document.getElementById("paramPanelFloating");
+        const aeroPanel = document.getElementById("aeroPanelFloating");
+        
+        if (paramPanel) paramPanel.classList.remove("hidden");
+        if (aeroPanel) {
+            if (params.type.includes("wing")) {
+                aeroPanel.classList.remove("hidden");
+            } else {
+                aeroPanel.classList.add("hidden");
+            }
+        }
 
-        document.getElementById("paramPanelFloating").style.display = "block";
-        document.getElementById("aeroPanelFloating").style.display =
-        params.type.includes("wing") ? "block" : "none";
-
+        // Build parameter sliders
         buildParamPanel(params);
-        generateAircraftPart(params, { reframe: true, keepRotation: true });
+        
+        // ✅ GENERATE THE 3D PART
+        console.log('🛠️ Generating 3D part...');
+        generateAircraftPart(params, { reframe: true });
+        
+        // ✅ RUN SAFETY CHECKS (in case generateAircraftPart doesn't call it)
+        const checks = runSafetyChecks(params);
+        displaySafetyChecks(checks);
+        
+        console.log('✓ Preset loaded successfully!');
     });
 });
 
