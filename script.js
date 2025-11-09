@@ -881,13 +881,20 @@ document.querySelectorAll('.example-chip').forEach(chip => {
 });
 
 // Append-only helpers for the output box
-function showOutputError(msg) {
-    const output = document.getElementById('output');
-    output.innerHTML += `<p class="error">❌ ${msg}</p>`;
-}
 function showOutputSuccess(msg) {
     const output = document.getElementById('output');
-    output.innerHTML += `<p class="success">✅ ${msg}</p>`;
+    const warn = document.getElementById('warnSlot');
+    output.innerHTML = '';
+    if (warn) output.appendChild(warn);
+    output.insertAdjacentHTML('beforeend', `<p class="success">✅ ${msg}</p>`);
+}
+
+function showOutputError(msg) {
+    const output = document.getElementById('output');
+    const warn = document.getElementById('warnSlot');
+    output.innerHTML = '';
+    if (warn) output.appendChild(warn);
+    output.insertAdjacentHTML('beforeend', `<p class="error">❌ ${msg}</p>`);
 }
 function resetOutput(msg = '') {
     const output = document.getElementById('output');
@@ -895,16 +902,20 @@ function resetOutput(msg = '') {
 }
 function displayParameters(params, replace = false) {
     const output = document.getElementById('output');
-    const prettyKey = (k) => {
-        if (k === 'naca') return 'NACA';
-        return k;
-    };
+
     let s = '<h4 class="success">✓ Extracted Parameters:</h4><div class="params-box">';
+
     for (const [k, v] of Object.entries(params)) {
-        if (v !== null && v !== undefined && k !== '_raw') {
-            s += `<div class="param-item"><strong>${prettyKey(k)}:</strong> ${Number(v).toFixed(3)}</div>`;
-        }
+        if (v === null || v === undefined || k === "_raw") continue;
+
+        let val =
+            typeof v === "number"
+                ? v.toFixed(3)
+                : escapeHtml(String(v)); // <-- prevents NaN for type
+
+        s += `<div class="param-item"><strong>${k}:</strong> ${val}</div>`;
     }
+
     s += '</div>';
 
     if (replace) {
