@@ -1122,14 +1122,6 @@ function hydrateTestingState() {
     userInputEl.addEventListener('input', (e) => {
         localStorage.setItem(LS.userInput, e.target.value);
     });
-
-    const clearBtn = document.getElementById('clearSaved');
-    clearBtn.addEventListener('click', () => {
-        removeKeys(LS.rememberFlag, LS.apiKey, LS.userInput, LS.paramsByType);
-        rememberKeyEl.checked = false;
-        apiKeyEl.value = '';
-        showOutputSuccess('Cleared saved testing data.');
-    });
 }
 
 const autorotateEl = document.getElementById('toggleAutorotate');
