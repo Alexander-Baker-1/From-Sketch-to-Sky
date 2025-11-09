@@ -165,8 +165,8 @@ function generateAircraftPart(params, options = {}) {
 
     const material = new THREE.MeshStandardMaterial({
         color: 0xb0b0b0,    // soft metallic silver
-        metalness: 0.85,    // high reflectivity
-        roughness: 0.25,    // slightly glossy
+        metalness: 0.55,    // high reflectivity
+        roughness: 0.35,    // slightly glossy
     });       
   
     // --- Geometry by type ---
@@ -186,7 +186,27 @@ function generateAircraftPart(params, options = {}) {
     geometry.translate(-c.x, -c.y, -c.z);
   
     // Build mesh and attach to pivot (pivot holds rotation forever)
-    currentMesh = new THREE.Mesh(geometry);
+    // shiny wing surface (your current material)
+    const wingSkinMat = new THREE.MeshStandardMaterial({
+        color: 0xb0b0b0,
+        metalness: 0.55,
+        roughness: 0.35
+    });
+
+    // matte endcaps to stop the white blowout
+    const matteCapMat = new THREE.MeshStandardMaterial({
+        color: 0x999999,   // same-ish color, but softer
+        metalness: 0.0,    // matte = no mirror reflection
+        roughness: 1.0     // fully diffuse
+    });
+
+    // Tell Three.js to use 3 materials matching groups 0,1,2
+    currentMesh = new THREE.Mesh(geometry, [
+        wingSkinMat,   // group 0 (side walls — shiny)
+        matteCapMat,   // group 1 (root cap — matte)
+        matteCapMat    // group 2 (tip cap — matte)
+    ]);
+
     pivot.add(currentMesh);
   
     // Wireframe overlay (attached to mesh so it gets disposed with it)
@@ -210,46 +230,89 @@ function generateAircraftPart(params, options = {}) {
 }  
 
 function createWing(params) {
-    const b      = coerce(params.span, 10);        // span (full)
-    const cr     = coerce(params.rootChord, 2);    // root chord
-    const ct     = coerce(params.tipChord, 1);     // tip chord
-    const sweepD = coerce(params.sweep, 0);        // leading-edge sweep (deg)
-    const naca   = (params.naca || '').trim();
-  
-    // 2D airfoil at unit chord in X–Y (0..1 in X), thickness in ±Y
-    const baseShape = isValidNaca4(naca) ? makeNaca4Shape(naca, 1, 200)
-                                         : makeNaca4Shape('0012', 1, 200);
-  
-    // Extrude along +Z with depth = b, then center Z to [-b/2, +b/2]
-    const geo = new THREE.ExtrudeGeometry(baseShape, { steps: 80, depth: b, bevelEnabled: false });
+    // === Extract numeric params ===
+    const b      = coerce(params.span, 10);
+    const cr     = coerce(params.rootChord, 2);
+    const ct     = coerce(params.tipChord, 1);
+    const sweepD = coerce(params.sweep, 0);
+    const naca   = (params.naca || "").trim();
+
+    const tiny   = 1e-4;
+    const safeCr = Math.max(cr, tiny);
+    const safeCt = Math.max(ct, tiny);
+
+    const baseShape = isValidNaca4(naca)
+        ? makeNaca4Shape(naca, 1, 200)
+        : makeNaca4Shape("0012", 1, 200);
+
+    const geo = new THREE.ExtrudeGeometry(baseShape, {
+        steps: 80,
+        depth: b,
+        bevelEnabled: false
+    });
+
     geo.translate(0, 0, -b / 2);
-  
-    // Apply taper and leading-edge sweep as a pure X-shear/scale; Z is untouched
-    const tanL = Math.tan((sweepD * Math.PI) / 180); // sweep tangent
-    const pos = geo.attributes.position;
-  
+
+    // === TAPER + SWEEP (shear only) ===
+    const tanL = Math.tan((sweepD * Math.PI) / 180);
+    const pos  = geo.attributes.position;
+
     for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      const z = pos.getZ(i);             // z ∈ [-b/2, +b/2] (span axis)
-  
-      const u   = (z + b / 2) / b;       // 0 at root, 1 at tip
-      const c   = cr + (ct - cr) * u;    // chord at this span station
-      const xLE = (z + b / 2) * tanL;    // leading-edge offset
-  
-      // Scale about LE: x∈[0,1] → [0,c], then shift by xLE. y scales with c.
-      x = x * c + xLE;
-      y = y * c;
-  
-      pos.setX(i, x);
-      pos.setY(i, y);
-      // Z stays exactly the same — no rotation, no z-scale
+        let x = pos.getX(i);
+        let y = pos.getY(i);
+        const z = pos.getZ(i);
+
+        const u   = (z + b / 2) / b;
+        const c   = safeCr + (safeCt - safeCr) * u;
+        const xLE = (z + b / 2) * tanL;
+
+        x = x * c + xLE;
+        y = y * c;
+
+        pos.setX(i, x);
+        pos.setY(i, y);
     }
-  
     pos.needsUpdate = true;
+
+    // === Compute base normals ===
     geo.computeVertexNormals();
+
+    // ✅ FIX WHITE END CAPS by overriding their normals completely
+    if (geo.groups && geo.groups.length >= 3) {
+        const cap1 = geo.groups[1]; // root cap
+        const cap2 = geo.groups[2]; // tip cap
+        const nrm = geo.attributes.normal;
+
+        // Sample a typical wing surface normal near midspan (z=0)
+        // We average 200 random vertices to avoid noise.
+        let avg = new THREE.Vector3();
+        let count = 0;
+        for (let i = 0; i < pos.count; i += 50) {
+            const z = pos.getZ(i);
+            if (Math.abs(z) < 0.01) { // central section
+                avg.x += nrm.getX(i);
+                avg.y += nrm.getY(i);
+                avg.z += nrm.getZ(i);
+                count++;
+            }
+        }
+        if (count > 0) avg.multiplyScalar(1 / count).normalize();
+        else avg.set(0, 1, 0); // fallback
+
+        function applyNormalToCap(cap) {
+            for (let i = cap.start; i < cap.start + cap.count; i++) {
+                nrm.setXYZ(i, avg.x, avg.y, avg.z);
+            }
+        }
+
+        applyNormalToCap(cap1);
+        applyNormalToCap(cap2);
+
+        nrm.needsUpdate = true;
+    }
+
     return geo;
-}  
+}
 
 function createFuselage(params) {
     const length = coerce(params.length, 8);
