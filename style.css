@@ -265,3 +265,31 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .slider-row input[type="number"] { padding:6px 8px; font-size:13px; }
 
 .hidden { display:none; }
+
+.viewer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* Make the toggle look nice on the right */
+#autorotateTogglePanel {
+    background: transparent !important; /* no white box */
+    box-shadow: none !important;
+    padding: 2px 4px;
+    backdrop-filter: none;
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.auto-rotate-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}

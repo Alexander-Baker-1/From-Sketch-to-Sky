@@ -57,12 +57,6 @@
         <!-- Generate Button -->
         <button id="generateBtn">Generate 3D Part</button>
 
-        <!-- Auto-rotate Toggle -->
-        <div class="input-group" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="toggleAutorotate" checked />
-            <label for="toggleAutorotate" style="margin:0;font-weight:600;">Auto-rotate</label>
-        </div>
-
         <!-- Export Dropdown -->
         <div class="export-dropdown">
             <button id="exportDropdownBtn">Export Model ▾</button>
@@ -82,7 +76,16 @@
 
         <!-- RIGHT PANEL -->
         <div class="right-panel">
-            <h1>3D Viewer</h1>
+            <div class="viewer-header">
+                <h1>3D Viewer</h1>
+            
+                <div id="autorotateTogglePanel">
+                    <label class="auto-rotate-label">
+                        <input type="checkbox" id="toggleAutorotate" checked>
+                        Auto-rotate
+                    </label>
+                </div>
+            </div>            
 
             <!-- ✅ ✅ New wrapper for viewer + floating panels -->
             <div id="viewerWrapper">
