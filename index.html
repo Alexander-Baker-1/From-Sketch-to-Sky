@@ -49,7 +49,7 @@
                 <label>💡 Try These Examples:</label>
                 <div class="example-chip" data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
                 <div class="example-chip" data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
-                <div class="example-chip" data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
+                <div class="example-chip" data-params='{"type":"fuselage","length":25,"diameter":3}'>Fuselage</div>
                 <div class="example-chip" data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
             </div>
     
@@ -65,6 +65,10 @@
                     <div class="export-item" id="exportGLB">Export as GLB (.glb)</div>
                 </div>
             </div>
+
+            <button onclick="generateDesignReport()" style="margin-top:10px; background:#2196F3;">
+                📋 Export Design Report
+            </button>
     
             <!-- ✅ NEW: Side-by-Side Results Container -->
             <div class="results-container">
