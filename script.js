@@ -68,7 +68,6 @@ function safeRemove(object) {
     scene.remove(object);
 }
 
-
 // ============================================
 // THREE.JS SETUP - 3D GRAPHICS ENGINE
 // ============================================
@@ -354,7 +353,6 @@ function createStabilizer(params) {
     return geo;
 }
 
-
 // ============================================
 // SAFETY VALIDATION SYSTEM
 // ============================================
@@ -540,7 +538,6 @@ function displaySafetyChecks(checks) {
     
     safetyDiv.innerHTML = html;
 }
-
 
 // ============================================
 // DESIGN REPORT GENERATOR
@@ -767,7 +764,6 @@ aerospace engineers.
     console.log('📄 Design report generated and downloaded');
 }
 
-
 // ============================================
 // CAMERA AUTO-FRAMING (ZOOM TO FIT)
 // ============================================
@@ -808,7 +804,6 @@ function frameObject(mesh, camera, controls) {
         controls?.update();
     }
 }
-
 
 // ============================================
 // PARAMETER VALIDATION + WARNINGS
@@ -1111,14 +1106,12 @@ function makeSlider({ key, label, min, max, step, value }) {
     updateAeroMetricsFromParams(currentParams);
 });
 
-
     // === FINAL UPDATE (when letting go) ===
     range.addEventListener('change', () => {
         suppressReframe = false;
         updateAeroMetricsFromParams(currentParams);
         generateAircraftPart(currentParams, { reframe: false, keepRotation: true });
     });
-
 
     number.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') setVal(number.value, true);
@@ -1487,7 +1480,6 @@ function makeNaca4Shape(naca, chord = 1, N = 160) {
     return shape;
 }
 
-
 // ============================================
 // EXPORT DROPDOWN + EXPORTERS
 // ============================================
@@ -1541,7 +1533,6 @@ document.getElementById('exportGLB').addEventListener('click', () => {
         showOutputSuccess('Model exported as GLB successfully!');
     }, options);
 });
-
 
 // ============================================
 // API KEY / PROMPT PERSISTENCE (TESTING ONLY)
