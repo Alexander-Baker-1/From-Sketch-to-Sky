@@ -22,59 +22,64 @@
 
         <!-- LEFT PANEL -->
         <div class="left-panel">
-        <h1>✈️ AI Aircraft Generator</h1>
-        <p class="subtitle">Natural Language to 3D Aircraft Parts</p>
-
-        <!-- API Key Input -->
-        <div class="input-group">
-            <label for="apiKey">Gemini API Key:</label>
-            <input type="text" id="apiKey" placeholder="Paste your API key here"/>
-        </div>
-
-        <div class="input-group" style="margin-top:6px;">
-            <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+            <h1>✈️ AI Aircraft Generator</h1>
+            <p class="subtitle">Natural Language to 3D Aircraft Parts</p>
+    
+            <!-- API Key Input -->
+            <div class="input-group">
+                <label for="apiKey">Gemini API Key:</label>
+                <input type="text" id="apiKey" placeholder="Paste your API key here"/>
+            </div>
+    
+            <div class="input-group" style="margin-top:6px;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
                 <input type="checkbox" id="rememberKey"/>
                 Remember API key on this device
-            </label>
-        </div>
-
-        <!-- Description Input -->
-        <div class="input-group">
-            <label for="userInput">Describe Your Aircraft Part:</label>
-            <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep angle, 12 meter span"></textarea>
-        </div>
-
-        <!-- Example Prompts -->
-        <div style="margin-top: 15px;">
-            <label>💡 Try These Examples:</label>
-            <div class="example-chip" data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
-            <div class="example-chip" data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
-            <div class="example-chip" data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
-            <div class="example-chip" data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
-        </div>
-
-        <!-- Generate Button -->
-        <button id="generateBtn">Generate 3D Part</button>
-
-        <!-- Export Dropdown -->
-        <div class="export-dropdown">
-            <button id="exportDropdownBtn">Export Model ▾</button>
-                <div id="exportMenu" class="export-menu">
-                <div class="export-item" id="exportGLTF">Export as GLTF (.gltf)</div>
-                <div class="export-item" id="exportSTL">Export as STL (.stl)</div>
-                <div class="export-item" id="exportGLB">Export as GLB (.glb)</div>
+                </label>
             </div>
-        </div>
-
-        <!-- Output Display -->
-        <div id="output">
-            <div id="warnSlot"></div>
-            <p>Enter a description and generate your aircraft part!</p>
-        </div>
-        
-        <!-- Safety Validation Display -->
-        <div id="safetyChecks" style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:5px; font-size:13px;">
-            <!-- Safety checks will appear here after generation -->
+    
+            <!-- Description Input -->
+            <div class="input-group">
+                <label for="userInput">Describe Your Aircraft Part:</label>
+                <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep angle, 12 meter span"></textarea>
+            </div>
+    
+            <!-- Example Prompts -->
+            <div style="margin-top: 15px;">
+                <label>💡 Try These Examples:</label>
+                <div class="example-chip" data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
+                <div class="example-chip" data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
+                <div class="example-chip" data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
+                <div class="example-chip" data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
+            </div>
+    
+            <!-- Generate Button -->
+            <button id="generateBtn">Generate 3D Part</button>
+    
+            <!-- Export Dropdown -->
+            <div class="export-dropdown">
+                <button id="exportDropdownBtn">Export Model ▾</button>
+                <div id="exportMenu" class="export-menu">
+                    <div class="export-item" id="exportGLTF">Export as GLTF (.gltf)</div>
+                    <div class="export-item" id="exportSTL">Export as STL (.stl)</div>
+                    <div class="export-item" id="exportGLB">Export as GLB (.glb)</div>
+                </div>
+            </div>
+    
+            <!-- ✅ NEW: Side-by-Side Results Container -->
+            <div class="results-container">
+                <!-- Left Box: Output Display -->
+                <div id="output" class="result-box">
+                    <div id="warnSlot"></div>
+                    <p>Enter a description and generate your aircraft part!</p>
+                </div>
+    
+                <!-- Right Box: Safety Validation -->
+                <div id="safetyChecks" class="result-box">
+                    <h4>🛡️ Safety Validation</h4>
+                    <p style="color:#999; font-size:12px;">Safety checks will appear after generation</p>
+                </div>
+            </div>
         </div>
 
         <!-- RIGHT PANEL -->
