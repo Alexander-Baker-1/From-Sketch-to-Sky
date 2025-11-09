@@ -173,6 +173,11 @@ function generateAircraftPart(params, options = {}) {
     const cz = 0.5 * (bb.min.z + bb.max.z);
     geometry.translate(-cx, -cy, -cz);
   
+    if (partType.includes('vertical')) {
+        geometry.rotateY(Math.PI / 2);
+        geometry.rotateZ(Math.PI / 2);
+    }    
+
     currentMesh = new THREE.Mesh(geometry, material);
     scene.add(currentMesh);
   
@@ -252,18 +257,16 @@ function createStabilizer(params) {
     shape.lineTo(chord * 0.2, chord * 0.15);
     shape.closePath();
 
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-        steps: 10, depth: span,
-        bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05
+    const geo = new THREE.ExtrudeGeometry(shape, {
+        steps: 20,
+        depth: span,
+        bevelEnabled: false
     });
 
-    const type = (params.type || '').toLowerCase();
-    if (type.includes('vertical')) {
-        geometry.rotateX(Math.PI / 2);
-    } else {       
-        geometry.rotateX(Math.PI / 2);
-    }
-    return geometry;
+    // ✅ NO ROTATIONS — stabilizer lives in XY plane, extrudes along Z like wing
+    geo.translate(0, 0, -span / 2);
+
+    return geo;
 }
 
 // ============================================
@@ -620,8 +623,8 @@ function makeSlider({ key, label, min, max, step, value }) {
         const parsed = parseFloat(v);
         if (!Number.isFinite(parsed)) return; // ignore until valid
         const n = Math.max(min, Math.min(max, parsed));
-        range.value = String(n);
-        number.value = String(n);
+        range.value = n;
+        number.value = n.toFixed(2);
         document.getElementById(`${id}_val`).textContent = n;
         currentParams[key] = n;
         suppressReframe = !reframe;
@@ -634,7 +637,7 @@ function makeSlider({ key, label, min, max, step, value }) {
         const parsed = parseFloat(range.value);
         if (!Number.isFinite(parsed)) return;
         currentParams[key] = parsed;
-        document.getElementById(`${id}_val`).textContent = parsed;
+        document.getElementById(`${id}_val`).textContent = parsed.toFixed(2);
         suppressReframe = true;
         generateAircraftPart(currentParams, { reframe:false });
     

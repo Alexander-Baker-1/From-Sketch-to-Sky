@@ -44,6 +44,22 @@
             <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep angle, 12 meter span"></textarea>
         </div>
 
+        <!-- Example Prompts -->
+        <div style="margin-top: 15px;">
+            <label>💡 Try These Examples:</label>
+            <div class="example-chip"
+                data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
+
+            <div class="example-chip"
+                data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
+
+            <div class="example-chip"
+                data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
+
+            <div class="example-chip"
+                data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
+        </div>
+
         <!-- Generate Button -->
         <button id="generateBtn">Generate 3D Part</button>
 
@@ -87,22 +103,6 @@
                 <input id="areaInput" type="number" step="0.01" min="0.1" max="500">
             </div>
         </div>              
-
-        <!-- Example Prompts -->
-        <div style="margin-top: 15px;">
-            <label>💡 Try These Examples:</label>
-            <div class="example-chip"
-                data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
-
-            <div class="example-chip"
-                data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
-
-            <div class="example-chip"
-                data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
-
-            <div class="example-chip"
-                data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
-        </div>
 
         <!-- Output Display -->
         <div id="output">
