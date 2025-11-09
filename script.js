@@ -86,7 +86,7 @@ function generateAircraftPart(params) {
 
     if (currentMesh) scene.remove(currentMesh);
 
-    const type = params.type.toLowerCase();
+    const partType = (params.type || "unknown").toLowerCase();
     let geometry;
 
     // MATERIAL
@@ -101,9 +101,9 @@ function generateAircraftPart(params) {
     });
 
     // GEOMETRY
-    if (type.includes('wing')) geometry = createWing(params);
-    else if (type.includes('fuselage')) geometry = createFuselage(params);
-    else if (type.includes('stabilizer')) geometry = createStabilizer(params);
+    if (partType.includes('wing')) geometry = createWing(params);
+    else if (partType.includes('fuselage')) geometry = createFuselage(params);
+    else if (partType.includes('stabilizer')) geometry = createStabilizer(params);
     else geometry = new THREE.BoxGeometry(3, 1, 6);
 
     // CENTER + POSITION ABOVE GRID
@@ -201,6 +201,109 @@ function createStabilizer(params) {
 
 
 // ============================================
+// PARAMETER VALIDATION
+// ============================================
+
+function validateParams(params, userInput) {
+    userInput = String(userInput || "");
+    const warnings = [];
+
+    // ---- Validate TYPE ----
+    if (!params.type || typeof params.type !== "string") {
+        const guess = guessPartTypeFromText(userInput);
+        if (guess) {
+            warnings.push(`Type not detected from AI. Using inferred type: ${guess}.`);
+            params.type = guess;
+        } else {
+            throw new Error("Invalid or missing part type. Please describe a wing, fuselage, or stabilizer.");
+        }
+    }
+
+    params.type = params.type.toLowerCase();
+
+    // ---- Validate SPAN ----
+    if (params.span !== null) {
+        if (isNaN(params.span) || params.span <= 0) {
+            warnings.push("Span must be a positive number. Using default 10m.");
+            params.span = 10;
+        }
+        if (params.span > 100) {
+            warnings.push("Span too large (>100m). Clamped to 100m.");
+            params.span = 100;
+        }
+    }
+
+    // ---- Validate CHORD ----
+    if (params.chord !== null) {
+        if (isNaN(params.chord) || params.chord <= 0) {
+            warnings.push("Chord must be a positive number. Using default 2m.");
+            params.chord = 2;
+        }
+    }
+
+    // ---- Validate SWEEP ----
+    if (params.sweep !== null) {
+        if (isNaN(params.sweep)) {
+            warnings.push("Sweep must be a number. Using 0°.");
+            params.sweep = 0;
+        }
+        if (params.sweep < 0 || params.sweep > 60) {
+            warnings.push(`Sweep ${params.sweep}° out of range (0–60°). Clamped.`);
+            params.sweep = Math.max(0, Math.min(params.sweep, 60));
+        }
+    }
+
+    // ---- Validate LENGTH ----
+    if (params.length !== null) {
+        if (isNaN(params.length) || params.length <= 0) {
+            warnings.push("Length must be a positive number. Using default 8m.");
+            params.length = 8;
+        }
+    }
+
+    // ---- Validate DIAMETER ----
+    if (params.diameter !== null) {
+        if (isNaN(params.diameter) || params.diameter <= 0) {
+            warnings.push("Diameter must be a positive number. Using default 2m.");
+            params.diameter = 2;
+        }
+    }
+
+    // ---- Show warnings, if any ----
+    if (warnings.length > 0) {
+        showOutputError("⚠️ Parameter adjustments:<br>" + warnings.join("<br>"));
+    }
+
+    return params;
+}
+
+
+// ============================================
+// NLP FALLBACK FOR TYPE DETECTION
+// ============================================
+
+function guessPartTypeFromText(userInput) {
+    const text = userInput.toLowerCase();
+
+    if (text.includes("wing")) return "wing";
+    if (text.includes("airfoil")) return "wing";
+    if (text.includes("delta")) return "wing";
+    if (text.includes("swept")) return "wing";
+
+    if (text.includes("fuselage")) return "fuselage";
+    if (text.includes("body")) return "fuselage";
+    if (text.includes("tube")) return "fuselage";
+
+    if (text.includes("stabilizer")) return "stabilizer";
+    if (text.includes("tail")) return "stabilizer";
+    if (text.includes("fin")) return "stabilizer";
+    if (text.includes("rudder")) return "stabilizer";
+
+    return null; // no clue
+}
+
+
+// ============================================
 // GEMINI API INTEGRATION
 // ============================================
 
@@ -264,10 +367,42 @@ Description: "${userInput}"
     const data = await response.json();
     const text = data.candidates[0].content.parts[0].text;
 
+    // Try to extract JSON
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Invalid JSON from model");
 
-    return JSON.parse(match[0]);
+    if (!match) {
+        // Fallback: create an "empty" safe param object
+        return {
+            type: null,
+            span: null,
+            length: null,
+            diameter: null,
+            chord: null,
+            sweep: null,
+            material: null,
+            _raw: text   // keep original for debugging if needed
+        };
+    }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(match[0]);
+    } catch {
+        // still invalid? return safe fallback
+        parsed = {
+            type: null,
+            span: null,
+            length: null,
+            diameter: null,
+            chord: null,
+            sweep: null,
+            material: null,
+            _raw: text
+        };
+    }
+
+    return parsed;
+
 }
 
 
@@ -287,7 +422,8 @@ document.getElementById('generateBtn').addEventListener('click', async function 
     this.disabled = true;
 
     try {
-        const params = await callGeminiAPI(apiKey, userInput);
+        let params = await callGeminiAPI(apiKey, userInput);
+        params = validateParams(params, userInput);
         displayParameters(params);
         generateAircraftPart(params);
         output.innerHTML += '<p class="success" style="margin-top:10px;">✓ 3D model generated successfully!</p>';
