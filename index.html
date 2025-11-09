@@ -69,6 +69,25 @@
             <div id="paramControls"></div>
         </div>
 
+        <div id="aeroMetricsBox" class="params-box hidden" style="margin-top:15px;">
+            <h4>Aerodynamic Metrics</h4>
+        
+            <div class="param-item">
+                <label>Aspect Ratio (AR)</label>
+                <input id="arInput" type="number" step="0.01" min="0.1" max="200">
+            </div>
+        
+            <div class="param-item">
+                <label>Taper Ratio (λ = Ct / Cr)</label>
+                <input id="lambdaInput" type="number" step="0.01" min="0.01" max="2">
+            </div>
+        
+            <div class="param-item">
+                <label>Planform Area (S)</label>
+                <input id="areaInput" type="number" step="0.01" min="0.1" max="500">
+            </div>
+        </div>              
+
         <!-- Example Prompts -->
         <div style="margin-top: 15px;">
             <label>💡 Try These Examples:</label>

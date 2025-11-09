@@ -116,6 +116,8 @@ function initThreeJS() {
     // Load saved testing data
     hydrateTestingState();
 
+    attachAeroMetricHandlers();
+
     console.log('✓ Three.js initialized successfully!');
 }
 
@@ -151,31 +153,30 @@ function generateAircraftPart(params, options = {}) {
     const materialColor =
       params.material?.includes('carbon')   ? 0x222222 :
       params.material?.includes('titanium') ? 0xcccccc :
-      params.material?.includes('aluminum') ? 0xaaaaaa :
-                                              0x4488ff;
+      params.material?.includes('aluminum') ? 0xaaaaaa : 0x4488ff;
   
-    const material = new THREE.MeshStandardMaterial({
-      color: materialColor, metalness: 0.7, roughness: 0.3
-    });
+    const material = new THREE.MeshStandardMaterial({ color: materialColor, metalness: 0.7, roughness: 0.3 });
   
     // Geometry
     if (partType.includes('wing'))       geometry = createWing(params);
-    else if (partType.includes('fuselage'))   geometry = createFuselage(params);
-    else if (partType.includes('stabilizer')) geometry = createStabilizer(params);
+    else if (partType.includes('fuselage'))  geometry = createFuselage(params);
+    else if (partType.includes('stabilizer'))geometry = createStabilizer(params);
     else geometry = new THREE.BoxGeometry(3, 1, 6);
   
-    // If your create* already centers, you can skip center() here.
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
     geometry.computeVertexNormals();
   
+    // Center so half above/below y=0
+    geometry.computeBoundingBox();
+    const bb = geometry.boundingBox;
+    const cx = 0.5 * (bb.min.x + bb.max.x);
+    const cy = 0.5 * (bb.min.y + bb.max.y);
+    const cz = 0.5 * (bb.min.z + bb.max.z);
+    geometry.translate(-cx, -cy, -cz);
+  
     currentMesh = new THREE.Mesh(geometry, material);
-    currentMesh.position.set(0, 0, 0);
     scene.add(currentMesh);
   
-    if (options.reframe === true && !suppressReframe) {
-      frameObject(currentMesh, camera, controls);
-    }
+    if (options.reframe === true && !suppressReframe) frameObject(currentMesh, camera, controls);
   
     // Wireframe overlay
     const wireframe = new THREE.WireframeGeometry(geometry);
@@ -188,44 +189,43 @@ function generateAircraftPart(params, options = {}) {
 }  
 
 function createWing(params) {
-    const span   = coerce(params.span, 10);
-    const chord  = coerce(params.chord, 2);
-    const sweepD = coerce(params.sweep, 0);
+    const b      = coerce(params.span, 10);               // span (full)
+    const cr     = coerce(params.rootChord, 2);           // root chord
+    const ct     = coerce(params.tipChord, 1);            // tip chord
+    const sweepD = coerce(params.sweep, 0);               // leading-edge sweep (deg)
     const naca   = (params.naca || '').trim();
   
-    // 2D airfoil in X–Y (chord along +X, thickness ±Y)
-    const shape = (isValidNaca4(naca))
-      ? makeNaca4Shape(naca, chord, 160)
-      : (() => {
-          const s = new THREE.Shape();
-          s.moveTo(0, 0);
-          s.lineTo(chord, 0);
-          s.lineTo(chord * 0.9, chord * 0.1);
-          s.lineTo(chord * 0.1, chord * 0.1);
-          s.closePath();
-          return s;
-        })();
+    // 2D airfoil at UNIT chord in X–Y (0..1 in x), thickness in ±Y
+    const baseShape = isValidNaca4(naca) ? makeNaca4Shape(naca, 1, 200) : makeNaca4Shape('0012', 1, 200);
   
-    // Extrude along +Z = span
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-      steps: 20,
-      depth: span,
-      bevelEnabled: false
-    });
+    // Linear extrude along +Z with depth=b, then center to [-b/2, +b/2]
+    const geo = new THREE.ExtrudeGeometry(baseShape, { steps: 60, depth: b, bevelEnabled: false });
+    geo.translate(0, 0, -b / 2);
   
-    // Sweep about world up (Y): tilts the leading edge aft without shearing
-    const sweep = sweepD * Math.PI / 180;
-    geometry.rotateY(sweep);
+    // Warp vertices to apply taper + sweep LE (no rotation)
+    const tanL = Math.tan(sweepD * Math.PI / 180); // Λ_LE
+    const pos = geo.attributes.position;
   
-    // Center the geometry so half is above/below Y=0 and left/right around Z=0
-    geometry.computeBoundingBox();
-    const bb = geometry.boundingBox;
-    const cx = 0.5 * (bb.min.x + bb.max.x);
-    const cy = 0.5 * (bb.min.y + bb.max.y);
-    const cz = 0.5 * (bb.min.z + bb.max.z);
-    geometry.translate(-cx, -cy, -cz);
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);                 // z ∈ [-b/2, +b/2]
   
-    return geometry;
+      const u  = (z + b / 2) / b;          // 0 at root, 1 at tip
+      const c  = cr + (ct - cr) * u;       // chord at this span station
+      const xLE = (z + b / 2) * tanL;      // leading edge offset
+  
+      // Scale about the LE so LE follows xLE and thickness scales with chord
+      x = x * c + xLE;                     // x in [0,c] shifted by sweep
+      y = y * c;                           // thickness scales with chord
+  
+      pos.setX(i, x);
+      pos.setY(i, y);
+      // z stays the same (no rotate/shear)
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
 }  
 
 function createFuselage(params) {
@@ -378,33 +378,38 @@ function validateParams(raw, userInput) {
 
     // Normalize per type, set defaults, clamp, and remove irrelevant keys
     if (params.type.includes('wing')) {
-        // Map text size to span if span missing/invalid
+        // Map text size to span if missing
         if ((!isNum(params.span) || params.span <= 0) && Number.isFinite(sizeFromText) && sizeFromText > 0) {
             params.span = sizeFromText;
             warnings.push('Mapped provided size to wing span.');
         }
 
-        // Defaults & checks
+        // Accept either chord OR rootChord/tipChord; prefer explicit root/tip
+        const hasRoot = isNum(params.rootChord);
+        const hasTip = isNum(params.tipChord);
+        if (!hasRoot && isNum(params.chord)) params.rootChord = Number(params.chord);
+        if (!hasTip && isNum(params.chord)) params.tipChord = Number(params.chord);
+
+        if (!isNum(params.rootChord) || params.rootChord <= 0) { warnings.push('Using default root chord.'); params.rootChord = 2; }
+        if (!isNum(params.tipChord) || params.tipChord <= 0) { warnings.push('Using default tip chord.'); params.tipChord = params.rootChord * 0.5; }
+
+        // Clamp and defaults
         if (!isNum(params.span) || params.span <= 0) { warnings.push('Using default wing span.'); params.span = 10; }
         if (params.span > 100) { warnings.push('Span too large (>100m). Clamped.'); params.span = 100; }
 
-        if (!isNum(params.chord) || params.chord <= 0) { warnings.push('Using default wing chord.'); params.chord = 2; }
-
         if (!isNum(params.sweep)) { warnings.push('Sweep must be a number. Using 0°.'); params.sweep = 0; }
-        params.sweep = Math.max(0, Math.min(60, params.sweep));
+        params.sweep = Math.max(0, Math.min(60, params.sweep)); // leading-edge sweep in degrees
 
-        // NACA (4-digit) handling: keep only 4 digits or clear it
+        // NACA (4-digit) cleanup
         if (typeof params.naca === 'string') {
             const digits = params.naca.replace(/\D/g, '');
             params.naca = /^\d{4}$/.test(digits) ? digits : null;
-        } else {
-            params.naca = null;
-        }
+        } else params.naca = null;
 
-
-        // Remove irrelevant fields
+        // Remove legacy keys so they don’t show in output
         delete params.length;
         delete params.diameter;
+        delete params.chord;
 
     } else if (params.type.includes('fuselage')) {
         // Map text size to length if length missing/invalid
@@ -475,105 +480,100 @@ function buildParamPanel(params) {
     currentParams = { ...params };
     const panel = document.getElementById('paramPanel');
     const ctrl  = document.getElementById('paramControls');
+    const aeroBox = document.getElementById('aeroMetricsBox');
+
     if (!panel || !ctrl) return;
-  
-    const type = (params.type || '').toLowerCase();
-    const defsByType = {
-      wing: [
-        { key: 'span',  label: 'Span (m)',   min: 0.5, max: 100, step: 0.1, value: coerce(params.span, 10) },
-        { key: 'chord', label: 'Chord (m)',  min: 0.1, max: 10,  step: 0.1, value: coerce(params.chord, 2) },
-        { key: 'sweep', label: 'Sweep (°)',  min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) }
-      ],
-      fuselage: [
-        { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: coerce(params.length, 8) },
-        { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10,  step: 0.1, value: coerce(params.diameter, 2) }
-      ],
-      stabilizer: [
-        { key: 'span',  label: 'Span (m)',   min: 0.5, max: 30, step: 0.1, value: coerce(params.span, 4) },
-        { key: 'sweep', label: 'Sweep (°)',  min: 0,   max: 60, step: 1,   value: coerce(params.sweep, 0) }
-      ]
-    };
-  
-    // Clear FIRST
     ctrl.innerHTML = '';
-  
+    aeroBox.classList.add("hidden"); // ALWAYS hide by default
+
+    const type = (params.type || "").toLowerCase();
+
+    const defsByType = {
+        wing: [
+            { key: 'span',       label: 'Span (m)',        min: 0.5, max: 100, step: 0.1, value: coerce(params.span, 10) },
+            { key: 'rootChord',  label: 'Root chord (m)',  min: 0.1, max: 10,  step: 0.1, value: coerce(params.rootChord, 2) },
+            { key: 'tipChord',   label: 'Tip chord (m)',   min: 0.05,max: 10,  step: 0.1, value: coerce(params.tipChord, 1) },
+            { key: 'sweep',      label: 'LE Sweep (°)',    min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) },
+        ],
+        fuselage: [
+            { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: coerce(params.length, 8) },
+            { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10,  step: 0.1, value: coerce(params.diameter, 2) }
+        ],
+        stabilizer: [
+            { key: 'span',  label: 'Span (m)',   min: 0.5, max: 30, step: 0.1, value: coerce(params.span, 4) },
+            { key: 'sweep', label: 'Sweep (°)',  min: 0,   max: 60, step: 1,   value: coerce(params.sweep, 0) }
+        ]
+    };
+
     const defList =
-      type.includes('wing')     ? defsByType.wing :
-      type.includes('fuselage') ? defsByType.fuselage :
-                                  defsByType.stabilizer;
-  
-    // Sliders
+        type.includes("wing") ? defsByType.wing :
+        type.includes("fuselage") ? defsByType.fuselage :
+        defsByType.stabilizer;
+
+    // Build sliders
     defList.forEach(def => ctrl.appendChild(makeSlider(def)));
-  
-    // NACA input for wings
-    if (type.includes('wing')) {
-      const wrap = document.createElement('div');
-      wrap.className = 'slider-row';
-      const id = 'naca_code';
-  
-      const label = document.createElement('label');
-      label.setAttribute('for', id);
-      label.textContent = 'NACA (4-digit)';
-      label.style.display = 'block';
-      label.style.marginBottom = '6px';
-  
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.id = id;
-      input.placeholder = 'e.g. 2412';
-      input.value = (params.naca || '');
-      input.maxLength = 8;
-      input.style.width = '110px';
-  
-      input.addEventListener('input', () => {
-        currentParams.naca = input.value.replace(/\s+/g, '');
-      });
-      input.addEventListener('change', () => {
-        const digits = input.value.replace(/\D/g, '');
-        currentParams.naca = /^\d{4}$/.test(digits) ? digits : null;
-        regenerateFromPanel(true);
-      });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const digits = input.value.replace(/\D/g, '');
-          currentParams.naca = /^\d{4}$/.test(digits) ? digits : null;
-          regenerateFromPanel(true);
-        }
-      });
-  
-      wrap.appendChild(label);
-      wrap.appendChild(input);
-      ctrl.appendChild(wrap);
+
+    // ✅ Only show Aero Metrics for wing
+    if (type.includes("wing")) {
+        aeroBox.classList.remove("hidden");
+        updateAeroMetricsFromParams(params);
     }
-  
-    // Material dropdown (all types)
-    const matWrap = document.createElement('div');
-    matWrap.className = 'slider-row';
-  
-    const matLabel = document.createElement('label');
-    matLabel.textContent = 'Material';
-    matLabel.style.display = 'block';
-    matLabel.style.marginBottom = '6px';
-  
-    const matSelect = document.createElement('select');
-    ['aluminum', 'carbon', 'titanium'].forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = m[0].toUpperCase() + m.slice(1);
-      matSelect.appendChild(opt);
+
+    // ✅ NACA input (only wings)
+    if (type.includes("wing")) {
+        const wrap = document.createElement("div");
+        wrap.className = "slider-row";
+
+        const label = document.createElement("label");
+        label.textContent = "NACA (4-digit)";
+        label.style.display = "block";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.id = "naca_code";
+        input.placeholder = "2412";
+        input.value = params.naca || "";
+        input.maxLength = 8;
+        input.style.width = "100px";
+
+        input.addEventListener("change", () => {
+            const digits = input.value.replace(/\D/g, "");
+            currentParams.naca = /^\d{4}$/.test(digits) ? digits : null;
+            regenerateFromPanel(true);
+        });
+
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        ctrl.appendChild(wrap);
+    }
+
+    // ✅ Material dropdown
+    const matWrap = document.createElement("div");
+    matWrap.className = "slider-row";
+
+    const matLabel = document.createElement("label");
+    matLabel.textContent = "Material";
+    matLabel.style.display = "block";
+
+    const matSelect = document.createElement("select");
+    ["aluminum","carbon","titanium"].forEach(m=>{
+        const opt=document.createElement("option");
+        opt.value=m;
+        opt.textContent=m[0].toUpperCase()+m.slice(1);
+        matSelect.appendChild(opt);
     });
-    matSelect.value = (params.material || 'aluminum');
-    matSelect.addEventListener('change', () => {
-      currentParams.material = matSelect.value;
-      regenerateFromPanel(false);
+    matSelect.value = params.material || "aluminum";
+    matSelect.addEventListener("change", ()=>{
+        currentParams.material = matSelect.value;
+        regenerateFromPanel(false);
     });
-  
+
     matWrap.appendChild(matLabel);
     matWrap.appendChild(matSelect);
     ctrl.appendChild(matWrap);
-  
-    panel.classList.remove('hidden');
-}  
+
+    panel.classList.remove("hidden");
+}
 
 function makeSlider({ key, label, min, max, step, value }) {
     const wrap = document.createElement('div');
@@ -644,6 +644,9 @@ function makeSlider({ key, label, min, max, step, value }) {
 
 function regenerateFromPanel(allowReframe = false) {
     if (!currentParams) return;
+    if (currentParams.type.includes("wing")) {
+        updateAeroMetricsFromParams(currentParams);
+    }
     generateAircraftPart(currentParams, { reframe: allowReframe });
 }
 
@@ -812,30 +815,30 @@ function resetOutput(msg = '') {
     const output = document.getElementById('output');
     output.innerHTML = msg;
 }
-function displayParameters(params, replace=false) {
+function displayParameters(params, replace = false) {
     const output = document.getElementById('output');
     const prettyKey = (k) => {
-      if (k === 'naca') return 'NACA';
-      if (k === 'material') return 'Material';
-      return k;
+        if (k === 'naca') return 'NACA';
+        if (k === 'material') return 'Material';
+        return k;
     };
     let s = '<h4 class="success">✓ Extracted Parameters:</h4><div class="params-box">';
     for (const [k, v] of Object.entries(params)) {
-      if (v !== null && v !== undefined && k !== '_raw') {
-        s += `<div class="param-item"><strong>${prettyKey(k)}:</strong> ${v}</div>`;
-      }
+        if (v !== null && v !== undefined && k !== '_raw') {
+            s += `<div class="param-item"><strong>${prettyKey(k)}:</strong> ${v}</div>`;
+        }
     }
     s += '</div>';
-  
+
     if (replace) {
-      const warn = document.getElementById('warnSlot');
-      output.innerHTML = '';
-      if (warn) output.appendChild(warn);
-      output.insertAdjacentHTML('beforeend', s);
+        const warn = document.getElementById('warnSlot');
+        output.innerHTML = '';
+        if (warn) output.appendChild(warn);
+        output.insertAdjacentHTML('beforeend', s);
     } else {
-      output.insertAdjacentHTML('beforeend', s);
+        output.insertAdjacentHTML('beforeend', s);
     }
-}  
+}
 function clearUI() {
     const output = document.getElementById('output');
     const warnSlot = document.getElementById('warnSlot');
@@ -863,70 +866,70 @@ function makeNaca4Shape(naca, chord = 1, N = 160) {
     const b = parseInt(naca[1], 10);
     const c = parseInt(naca[2], 10);
     const d = parseInt(naca[3], 10);
-  
+
     const m = a / 100;                // max camber
     const p = b / 10;                 // location of max camber (x/c)
     const t = (10 * c + d) / 100;     // thickness
-  
+
     // Cosine spacing in [0,1]
     const xs = [];
     for (let i = 0; i <= N; i++) {
-      const theta = Math.PI * i / N;
-      xs.push(0.5 * (1 - Math.cos(theta)));
+        const theta = Math.PI * i / N;
+        xs.push(0.5 * (1 - Math.cos(theta)));
     }
-  
+
     const xU = [], yU = [], xL = [], yL = [];
     for (const xRaw of xs) {
-      const x = Math.min(1, Math.max(0, xRaw));
-  
-      // Thickness
-      const yt = 5 * t * (
-        0.2969 * Math.sqrt(x) - 0.1260 * x
-        - 0.3516 * x * x + 0.2843 * x * x * x
-        - 0.1036 * x * x * x * x
-      );
-  
-      // Camber line + slope
-      let yc = 0, dyc = 0;
-      if (m !== 0 && p !== 0) {
-        if (x < p) {
-          yc  = m / (p * p) * (2 * p * x - x * x);
-          dyc = 2 * m / (p * p) * (p - x);
-        } else {
-          yc  = m / ((1 - p) * (1 - p)) * ((1 - 2 * p) + 2 * p * x - x * x);
-          dyc = 2 * m / ((1 - p) * (1 - p)) * (p - x);
+        const x = Math.min(1, Math.max(0, xRaw));
+
+        // Thickness
+        const yt = 5 * t * (
+            0.2969 * Math.sqrt(x) - 0.1260 * x
+            - 0.3516 * x * x + 0.2843 * x * x * x
+            - 0.1036 * x * x * x * x
+        );
+
+        // Camber line + slope
+        let yc = 0, dyc = 0;
+        if (m !== 0 && p !== 0) {
+            if (x < p) {
+                yc = m / (p * p) * (2 * p * x - x * x);
+                dyc = 2 * m / (p * p) * (p - x);
+            } else {
+                yc = m / ((1 - p) * (1 - p)) * ((1 - 2 * p) + 2 * p * x - x * x);
+                dyc = 2 * m / ((1 - p) * (1 - p)) * (p - x);
+            }
         }
-      }
-      const th = Math.atan(dyc);
-  
-      // Upper/lower
-      const xu = x - yt * Math.sin(th);
-      const yu = yc + yt * Math.cos(th);
-      const xl = x + yt * Math.sin(th);
-      const yl = yc - yt * Math.cos(th);
-  
-      xU.push(xu * chord); yU.push(yu * chord);
-      xL.push(xl * chord); yL.push(yl * chord);
+        const th = Math.atan(dyc);
+
+        // Upper/lower
+        const xu = x - yt * Math.sin(th);
+        const yu = yc + yt * Math.cos(th);
+        const xl = x + yt * Math.sin(th);
+        const yl = yc - yt * Math.cos(th);
+
+        xU.push(xu * chord); yU.push(yu * chord);
+        xL.push(xl * chord); yL.push(yl * chord);
     }
-  
+
     // Give the trailing edge a tiny finite thickness to avoid degeneracy
     const eps = 1e-5;
     yU[0] = 0; yL[0] = 0;                   // Leading edge meets
-    yU[yU.length - 1] =  +eps;              // TE upper tiny +ε
-    yL[yL.length - 1] =  -eps;              // TE lower tiny −ε
-  
+    yU[yU.length - 1] = +eps;              // TE upper tiny +ε
+    yL[yL.length - 1] = -eps;              // TE lower tiny −ε
+
     // Build loop: LE->TE along upper, TE->LE along lower (skip duplicate ends)
     const pts = [];
     pts.push(new THREE.Vector2(xU[0], yU[0]));
     for (let i = 1; i < xU.length; i++) pts.push(new THREE.Vector2(xU[i], yU[i]));
     for (let i = xL.length - 2; i >= 1; i--) pts.push(new THREE.Vector2(xL[i], yL[i]));
-  
+
     // Ensure counter-clockwise winding (what Shape expects)
     if (!THREE.ShapeUtils.isClockWise(pts)) pts.reverse();
-  
+
     const shape = new THREE.Shape(pts);
     return shape;
-}  
+}
 
 
 // ============================================
@@ -1032,5 +1035,67 @@ if (autorotateEl) {
     autorotateEl.addEventListener('change', (e) => {
         autorotate = !!e.target.checked;
         showOutputSuccess(`Auto-rotate ${autorotate ? 'enabled' : 'disabled'}.`);
+    });
+}
+
+function updateAeroMetricsFromParams(params) {
+    if (!params || !params.type.includes("wing")) return;
+
+    const b  = params.span;
+    const cr = params.rootChord;
+    const ct = params.tipChord;
+
+    const lambda = ct / cr;
+    const S = (b * (cr + ct)) / 2;
+    const AR = b * b / S;
+
+    document.getElementById("arInput").value = AR.toFixed(3);
+    document.getElementById("lambdaInput").value = lambda.toFixed(3);
+    document.getElementById("areaInput").value = S.toFixed(3);
+}
+
+function attachAeroMetricHandlers() {
+    const arEl   = document.getElementById("arInput");
+    const lamEl  = document.getElementById("lambdaInput");
+    const areaEl = document.getElementById("areaInput");
+
+    // === AR edited → span changes ===
+    arEl.addEventListener("change", () => {
+        if (!currentParams || !currentParams.type.includes("wing")) return;
+
+        const AR = Number(arEl.value);
+        const S  = Number(areaEl.value);
+
+        const b = Math.sqrt(AR * S);
+        currentParams.span = b;
+
+        regenerateFromPanel(true);
+    });
+
+    // === λ edited → tipChord changes ===
+    lamEl.addEventListener("change", () => {
+        if (!currentParams || !currentParams.type.includes("wing")) return;
+
+        const λ = Number(lamEl.value);
+        currentParams.tipChord = currentParams.rootChord * λ;
+
+        regenerateFromPanel(true);
+    });
+
+    // === S edited → chord lengths change (span fixed) ===
+    areaEl.addEventListener("change", () => {
+        if (!currentParams || !currentParams.type.includes("wing")) return;
+
+        const S = Number(areaEl.value);
+        const b = currentParams.span;
+        const λ = currentParams.tipChord / currentParams.rootChord;
+
+        const cr = (2 * S / b) / (1 + λ);
+        const ct = cr * λ;
+
+        currentParams.rootChord = cr;
+        currentParams.tipChord = ct;
+
+        regenerateFromPanel(true);
     });
 }
