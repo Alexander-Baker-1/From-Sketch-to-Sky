@@ -689,13 +689,14 @@ function makeSlider({ key, label, min, max, step, value }) {
 
         // ✅ Regenerate geometry WITHOUT rebuilding UI, WITHOUT moving camera
         generateAircraftPart(currentParams, { reframe: false });
+    updateAeroMetricsFromParams(currentParams);
 });
 
 
     // === FINAL UPDATE (when letting go) ===
     range.addEventListener('change', () => {
         suppressReframe = false;
-        regenerateFromPanel(true);  // rebuild UI & reframe ONLY once
+        updateAeroMetricsFromParams(currentParams);
         generateAircraftPart(currentParams, { reframe: false, keepRotation: true });
     });
 
@@ -887,10 +888,12 @@ document.querySelectorAll('.example-chip').forEach(chip => {
 // Append-only helpers for the output box
 function showOutputSuccess(msg) {
     const output = document.getElementById('output');
-    const warn = document.getElementById('warnSlot');
-    output.innerHTML = '';
-    if (warn) output.appendChild(warn);
-    output.insertAdjacentHTML('beforeend', `<p class="success">✅ ${msg}</p>`);
+
+    // Do NOT wipe output — only append
+    output.insertAdjacentHTML(
+        'beforeend',
+        `<p class="success">✅ ${msg}</p>`
+    );
 }
 
 function showOutputError(msg) {
