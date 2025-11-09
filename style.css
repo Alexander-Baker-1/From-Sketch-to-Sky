@@ -270,3 +270,29 @@ button:disabled {
   margin-bottom: 10px;
   font-size: 13px;
 }
+
+.param-panel {
+  margin-top: 15px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border: 1px solid #eee;
+}
+
+.param-panel.hidden { display: none; }
+
+.slider-row {
+  margin: 10px 0;
+}
+
+.slider-row label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.slider-row input[type="range"] {
+  width: 100%;
+}

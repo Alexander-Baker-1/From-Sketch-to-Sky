@@ -4,6 +4,8 @@
 
 let scene, camera, renderer, currentMesh, controls;
 let cachedWorkingModel = null;
+let currentParams = null;            // last validated params
+let suppressReframe = false;         // avoid camera jumps during slider drag
 
 
 // ============================================
@@ -81,7 +83,7 @@ function onWindowResize() {
 // 3D AIRCRAFT PART GENERATION
 // ============================================
 
-function generateAircraftPart(params) {
+function generateAircraftPart(params, options = {}) {
     console.log('🛠️ Generating aircraft part:', params);
 
     if (currentMesh) scene.remove(currentMesh);
@@ -340,6 +342,90 @@ function displayParameters(params) {
   output.innerHTML += html;
 }
 
+function buildParamPanel(params) {
+  currentParams = { ...params }; // keep a working copy
+  const panel = document.getElementById('paramPanel');
+  const controls = document.getElementById('paramControls');
+  if (!panel || !controls) return;
+
+  // Decide which sliders to show by type
+  const type = (params.type || '').toLowerCase();
+  const defsByType = {
+    wing: [
+      { key: 'span',     label: 'Span (m)',     min: 0.5, max: 100, step: 0.1, value: coerce(params.span, 10) },
+      { key: 'chord',    label: 'Chord (m)',    min: 0.1, max: 10,  step: 0.1, value: coerce(params.chord, 2) },
+      { key: 'sweep',    label: 'Sweep (°)',    min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) }
+    ],
+    fuselage: [
+      { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: coerce(params.length, 8) },
+      { key: 'diameter', label: 'Diameter (m)', min: 0.1, max: 10,  step: 0.1, value: coerce(params.diameter, 2) }
+    ],
+    stabilizer: [
+      { key: 'span',     label: 'Span (m)',     min: 0.5, max: 30,  step: 0.1, value: coerce(params.span, 4) },
+      { key: 'sweep',    label: 'Sweep (°)',    min: 0,   max: 60,  step: 1,   value: coerce(params.sweep, 0) }
+    ]
+  };
+
+  const defList =
+    type.includes('wing') ? defsByType.wing :
+    type.includes('fuselage') ? defsByType.fuselage :
+    defsByType.stabilizer; // default set
+
+  // Render sliders
+  controls.innerHTML = '';
+  defList.forEach(def => controls.appendChild(makeSlider(def)));
+
+  // Show the panel
+  panel.classList.remove('hidden');
+}
+
+function makeSlider({ key, label, min, max, step, value }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'slider-row';
+
+  const id = `slider_${key}`;
+  const header = document.createElement('label');
+  header.setAttribute('for', id);
+  header.innerHTML = `${label} <span id="${id}_val">${value}</span>`;
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.id = id;
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(value);
+
+  // Live update (no camera reframe while dragging)
+  input.addEventListener('input', () => {
+    document.getElementById(`${id}_val`).textContent = input.value;
+    currentParams[key] = parseFloat(input.value);
+    suppressReframe = true;
+    regenerateFromPanel();
+  });
+
+  // On release, allow a soft reframe once
+  input.addEventListener('change', () => {
+    suppressReframe = false;
+    regenerateFromPanel(true);
+  });
+
+  wrap.appendChild(header);
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function coerce(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function regenerateFromPanel(allowReframe = false) {
+  if (!currentParams) return;
+  // keep material/type as-is; values already clamped by slider ranges
+  generateAircraftPart(currentParams, { reframe: allowReframe });
+}
+
 
 // ============================================
 // NLP FALLBACK FOR TYPE DETECTION
@@ -493,7 +579,8 @@ document.getElementById('generateBtn').addEventListener('click', async function 
 
     showWarningsAboveParams(warnings);
     displayParameters(params);
-    generateAircraftPart(params);
+    buildParamPanel(params);
+    generateAircraftPart(params, { reframe: true });
 
     output.innerHTML += '<p class="success" style="margin-top:10px;">✓ 3D model generated successfully!</p>';
   } catch (err) {
