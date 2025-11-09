@@ -452,7 +452,7 @@ function displayParameters(params) {
     }
 
     html += '</div>';
-    output.innerHTML = html;
+    output.innerHTML += html;
 }
 
 
@@ -462,7 +462,7 @@ function displayParameters(params) {
 
 function showOutputError(msg) {
     const output = document.getElementById("output");
-    output.innerHTML = `<p class="error">❌ ${msg}</p>`;
+    output.innerHTML += `<p class="error">❌ ${msg}</p>`;
 }
 
 function showOutputSuccess(msg) {
