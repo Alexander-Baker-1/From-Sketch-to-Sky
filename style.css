@@ -1,10 +1,14 @@
-/* ============================================
-   AI AIRCRAFT GENERATOR - STYLES
-   ============================================ */
+/* ------------------------------------------------------------------
+   AI Aircraft Generator – Stylesheet
+   Purpose: Layout, UI structure, and visual theming for the application.
+   Notes: Pure CSS; no frameworks. Panels are positioned to overlay the
+          Three.js canvas while maintaining responsive behavior.
+   License: MIT
+------------------------------------------------------------------- */
 
-/* ============================================
-   RESET AND BASE
-   ============================================ */
+/* ===========================
+   Reset & Base Styling
+   =========================== */
 * {
     margin: 0;
     padding: 0;
@@ -22,9 +26,9 @@ body {
     display: none !important;
 }
 
-/* ============================================
-   LAYOUT - MAIN CONTAINER
-   ============================================ */
+/* ===========================
+   Layout Containers
+   =========================== */
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -48,9 +52,9 @@ body {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
-/* ============================================
-   TYPOGRAPHY
-   ============================================ */
+/* ===========================
+   Typography
+   =========================== */
 h1 {
     color: #333;
     margin-bottom: 10px;
@@ -75,9 +79,9 @@ label {
     font-size: 14px;
 }
 
-/* ============================================
-   FORM INPUTS
-   ============================================ */
+/* ===========================
+   Form Controls
+   =========================== */
 .input-group {
     margin-bottom: 15px;
 }
@@ -114,9 +118,9 @@ input[type="checkbox"] {
     cursor: pointer;
 }
 
-/* ============================================
-   BUTTONS
-   ============================================ */
+/* ===========================
+   Buttons
+   =========================== */
 button {
     width: 100%;
     padding: 12px;
@@ -143,9 +147,9 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* ============================================
-   EXAMPLE CHIPS
-   ============================================ */
+/* ===========================
+   Example Chips (Preset Prompts)
+   =========================== */
 .example-chip {
     display: inline-block;
     background: #e0e0e0;
@@ -164,9 +168,9 @@ button:disabled {
     border-color: #667eea;
 }
 
-/* ============================================
-   OUTPUT DISPLAY
-   ============================================ */
+/* ===========================
+   Output & Parameter Summary
+   =========================== */
 #output {
     margin-top: 15px;
     padding: 12px;
@@ -188,9 +192,9 @@ button:disabled {
     font-size: 12px;
 }
 
-/* ============================================
-   STATUS MESSAGES
-   ============================================ */
+/* ===========================
+   Status Messages
+   =========================== */
 .loading {
     color: #667eea;
     font-weight: bold;
@@ -214,9 +218,9 @@ button:disabled {
     border-radius: 4px;
 }
 
-/* ============================================
-   3D VIEWER
-   ============================================ */
+/* ===========================
+   3D Viewer
+   =========================== */
 .viewer-header {
     display: flex;
     justify-content: space-between;
@@ -251,14 +255,13 @@ button:disabled {
     z-index: 10;
 }
 
-/* ============================================
-   AUTO-ROTATE TOGGLE
-   ============================================ */
+/* ===========================
+   Auto-Rotate Toggle
+   =========================== */
 #autorotateTogglePanel {
     background: transparent !important;
     box-shadow: none !important;
     padding: 2px 4px;
-    backdrop-filter: none;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -273,9 +276,9 @@ button:disabled {
     gap: 6px;
 }
 
-/* ============================================
-   FLOATING PANELS (OVER 3D VIEWER)
-   ============================================ */
+/* ===========================
+   Floating Panels (Over Viewer)
+   =========================== */
 .floating-panel {
     width: 220px;
     padding: 10px;
@@ -289,7 +292,7 @@ button:disabled {
     padding: 8px;
 }
 
-/* Parameters Panel (right side) */
+/* Parameter panel (right) */
 #paramPanelFloating {
     position: absolute;
     top: 20px;
@@ -297,7 +300,7 @@ button:disabled {
     z-index: 30;
 }
 
-/* Aerodynamic Metrics Panel (left side) */
+/* Aerodynamic metrics (left) */
 #aeroPanelFloating {
     position: absolute;
     top: 20px;
@@ -315,9 +318,9 @@ button:disabled {
     display: block;
 }
 
-/* ============================================
-   PARAMETER SLIDERS
-   ============================================ */
+/* ===========================
+   Parameter Sliders
+   =========================== */
 .slider-row {
     margin: 10px 0;
 }
@@ -349,9 +352,9 @@ button:disabled {
     padding: 4px 6px;
 }
 
-/* ============================================
-   EXPORT DROPDOWN
-   ============================================ */
+/* ===========================
+   Export Dropdown
+   =========================== */
 .export-dropdown {
     position: relative;
     margin-top: 10px;
@@ -392,9 +395,9 @@ button:disabled {
     background: #f0f0f0;
 }
 
-/* ============================================
-   RESPONSIVE DESIGN
-   ============================================ */
+/* ===========================
+   Responsive
+   =========================== */
 @media (max-width: 768px) {
     .container {
         flex-direction: column;
@@ -410,9 +413,9 @@ button:disabled {
     }
 }
 
-/* ============================================
-   SIDE-BY-SIDE RESULTS (WITHIN LEFT PANEL)
-   ============================================ */
+/* ===========================
+   Left Panel: Side-by-Side Results
+   =========================== */
 .results-container {
     display: flex;
     gap: 10px;
@@ -434,7 +437,6 @@ button:disabled {
     color: #333;
 }
 
-/* Make them stack on small screens */
 @media (max-width: 768px) {
     .results-container {
         flex-direction: column;

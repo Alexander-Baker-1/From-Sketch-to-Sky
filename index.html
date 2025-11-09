@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
   <title>AI Aircraft Generator</title>
 
   <!-- Three.js + helpers -->
@@ -11,125 +14,185 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/GLTFExporter.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/STLExporter.js"></script>
 
-  <!-- GSAP -->
+  <!-- GSAP (for camera tweening) -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="container">
+  <noscript>
+    JavaScript is required to run the AI Aircraft Generator.
+  </noscript>
 
-        <!-- LEFT PANEL -->
-        <div class="left-panel">
-            <h1>✈️ AI Aircraft Generator</h1>
-            <p class="subtitle">Natural Language to 3D Aircraft Parts</p>
-    
-            <!-- API Key Input -->
-            <div class="input-group">
-                <label for="apiKey">Gemini API Key:</label>
-                <input type="text" id="apiKey" placeholder="Paste your API key here"/>
-            </div>
-    
-            <div class="input-group" style="margin-top:6px;">
-                <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
-                <input type="checkbox" id="rememberKey"/>
-                Remember API key on this device
-                </label>
-            </div>
-    
-            <!-- Description Input -->
-            <div class="input-group">
-                <label for="userInput">Describe Your Aircraft Part:</label>
-                <textarea id="userInput" placeholder="Example: swept wing with 35 degree sweep angle, 12 meter span"></textarea>
-            </div>
-    
-            <!-- Example Prompts -->
-            <div style="margin-top: 15px;">
-                <label>💡 Try These Examples:</label>
-                <div class="example-chip" data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
-                <div class="example-chip" data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
-                <div class="example-chip" data-params='{"type":"fuselage","length":25,"diameter":3}'>Fuselage</div>
-                <div class="example-chip" data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
-            </div>
-    
-            <!-- Generate Button -->
-            <button id="generateBtn">Generate 3D Part</button>
-    
-            <!-- Export Dropdown -->
-            <div class="export-dropdown">
-                <button id="exportDropdownBtn">Export Model ▾</button>
-                <div id="exportMenu" class="export-menu">
-                    <div class="export-item" id="exportGLTF">Export as GLTF (.gltf)</div>
-                    <div class="export-item" id="exportSTL">Export as STL (.stl)</div>
-                    <div class="export-item" id="exportGLB">Export as GLB (.glb)</div>
-                </div>
-            </div>
+  <div class="container" role="main">
+    <!-- LEFT: Controls / Output -->
+    <aside class="left-panel" aria-label="Configuration panel">
+      <h1>✈️ AI Aircraft Generator</h1>
+      <p class="subtitle">Natural language → 3D aircraft parts</p>
 
-            <button onclick="generateDesignReport()" style="margin-top:10px; background:#2196F3;">
-                📋 Export Design Report
-            </button>
-    
-            <!-- ✅ NEW: Side-by-Side Results Container -->
-            <div class="results-container">
-                <!-- Left Box: Output Display -->
-                <div id="output" class="result-box">
-                    <div id="warnSlot"></div>
-                    <p>Enter a description and generate your aircraft part!</p>
-                </div>
-    
-                <!-- Right Box: Safety Validation -->
-                <div id="safetyChecks" class="result-box">
-                    <h4>🛡️ Safety Validation</h4>
-                    <p style="color:#999; font-size:12px;">Safety checks will appear after generation</p>
-                </div>
-            </div>
+      <!-- API Key -->
+      <div class="input-group">
+        <label for="apiKey">Gemini API Key</label>
+        <input
+          type="text"
+          id="apiKey"
+          placeholder="Paste your API key"
+          inputmode="latin"
+          autocomplete="off"
+          spellcheck="false"
+          aria-describedby="apiKeyHelp"
+        />
+        <small id="apiKeyHelp" class="subtitle"
+          >Your key is stored locally only if you choose to remember it.</small
+        >
+      </div>
+
+      <div class="input-group" style="margin-top:6px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" id="rememberKey" />
+          Remember API key on this device
+        </label>
+      </div>
+
+      <!-- Prompt -->
+      <div class="input-group">
+        <label for="userInput">Describe your aircraft part</label>
+        <textarea
+          id="userInput"
+          placeholder="e.g., swept wing, 35° sweep, 12 m span, NACA 2412"
+          aria-label="Natural language description"
+        ></textarea>
+      </div>
+
+      <!-- Examples -->
+      <div style="margin-top:15px;">
+        <label>💡 Try these</label>
+        <div
+          class="example-chip"
+          data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'
+          tabindex="0"
+          role="button"
+          aria-label="Load Swept Wing preset"
+        >
+          Swept Wing
+        </div>
+        <div
+          class="example-chip"
+          data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'
+          tabindex="0"
+          role="button"
+          aria-label="Load Delta Wing preset"
+        >
+          Delta Wing
+        </div>
+        <div
+          class="example-chip"
+          data-params='{"type":"fuselage","length":25,"diameter":3}'
+          tabindex="0"
+          role="button"
+          aria-label="Load Fuselage preset"
+        >
+          Fuselage
+        </div>
+        <div
+          class="example-chip"
+          data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'
+          tabindex="0"
+          role="button"
+          aria-label="Load Vertical Stabilizer preset"
+        >
+          Vertical Stabilizer
+        </div>
+      </div>
+
+      <!-- Generate -->
+      <button id="generateBtn" aria-label="Generate 3D part">
+        Generate 3D Part
+      </button>
+
+      <!-- Export menu -->
+      <div class="export-dropdown">
+        <button id="exportDropdownBtn" aria-haspopup="true" aria-expanded="false">
+          Export Model ▾
+        </button>
+        <div id="exportMenu" class="export-menu" role="menu" aria-label="Export options">
+          <div class="export-item" id="exportGLTF" role="menuitem">Export as GLTF (.gltf)</div>
+          <div class="export-item" id="exportSTL" role="menuitem">Export as STL (.stl)</div>
+          <div class="export-item" id="exportGLB" role="menuitem">Export as GLB (.glb)</div>
+        </div>
+      </div>
+
+      <!-- Design report -->
+      <button
+        onclick="generateDesignReport()"
+        style="margin-top:10px; background:#2196F3;"
+        aria-label="Export design report"
+      >
+        📋 Export Design Report
+      </button>
+
+      <!-- Side-by-side results -->
+      <div class="results-container">
+        <!-- Extracted params + messages -->
+        <section id="output" class="result-box" aria-live="polite">
+          <div id="warnSlot"></div>
+          <p>Enter a description and generate your aircraft part!</p>
+        </section>
+
+        <!-- Safety validation -->
+        <section id="safetyChecks" class="result-box">
+          <h4>🛡️ Safety Validation</h4>
+          <p style="color:#999; font-size:12px;">
+            Safety checks will appear after generation.
+          </p>
+        </section>
+      </div>
+    </aside>
+
+    <!-- RIGHT: Viewer -->
+    <section class="right-panel" aria-label="3D viewer">
+      <div class="viewer-header">
+        <h1>3D Viewer</h1>
+        <div id="autorotateTogglePanel">
+          <label class="auto-rotate-label">
+            <input type="checkbox" id="toggleAutorotate" checked />
+            Auto-rotate
+          </label>
+        </div>
+      </div>
+
+      <!-- Wrapper anchors floating panels over the canvas -->
+      <div id="viewerWrapper">
+        <div id="viewer" role="img" aria-label="3D scene canvas"></div>
+
+        <!-- Parameter panel (floating, right) -->
+        <div id="paramPanelFloating" class="floating-panel hidden">
+          <div class="panel-section">
+            <h3>Parameters</h3>
+            <div id="paramControls"></div>
+          </div>
         </div>
 
-        <!-- RIGHT PANEL -->
-        <div class="right-panel">
-            <div class="viewer-header">
-                <h1>3D Viewer</h1>
-            
-                <div id="autorotateTogglePanel">
-                    <label class="auto-rotate-label">
-                        <input type="checkbox" id="toggleAutorotate" checked>
-                        Auto-rotate
-                    </label>
-                </div>
-            </div>            
+        <!-- Aerodynamic metrics (floating, left; wings only) -->
+        <div id="aeroPanelFloating" class="floating-panel hidden">
+          <div class="panel-section">
+            <h3>Aerodynamic Metrics</h3>
+            <label for="arInput">Aspect Ratio (AR)</label>
+            <input id="arInput" type="number" step="0.001" />
 
-            <!-- ✅ ✅ New wrapper for viewer + floating panels -->
-            <div id="viewerWrapper">
+            <label for="lambdaInput">Taper Ratio (λ = Ct / Cr)</label>
+            <input id="lambdaInput" type="number" step="0.001" />
 
-                <div id="viewer"></div>
-            
-                <!-- MUST BE INSIDE THE WRAPPER -->
-                <div id="paramPanelFloating" class="floating-panel hidden">
-                    <div class="panel-section">
-                        <h3>Parameters</h3>
-                        <div id="paramControls"></div>
-                    </div>
-                </div>
-            
-                <div id="aeroPanelFloating" class="floating-panel hidden">
-                    <div class="panel-section">
-                        <h3>Aerodynamic Metrics</h3>
-                        <label>Aspect Ratio (AR)</label>
-                        <input id="arInput" type="number">
-                        <label>Taper Ratio (λ = Ct / Cr)</label>
-                        <input id="lambdaInput" type="number">
-                        <label>Planform Area (S)</label>
-                        <input id="areaInput" type="number">
-                    </div>
-                </div>
-            
-            </div>            
+            <label for="areaInput">Planform Area (S)</label>
+            <input id="areaInput" type="number" step="0.001" />
+          </div>
         </div>
+      </div>
+    </section>
+  </div>
 
-    </div>
-
-  <!-- App Script -->
+  <!-- App script (must come after DOM) -->
   <script src="script.js"></script>
 </body>
 </html>

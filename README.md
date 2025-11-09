@@ -41,16 +41,6 @@ cd ai-aircraft-generator
    - Click "Generate 3D Part"
    - View the 3D model and adjust parameters!
 
-## 📸 Screenshots
-
-![Main Interface](screenshots/main-interface.png)
-![Wing Generation](screenshots/wing-example.png)
-![Safety Validation](screenshots/safety-checks.png)
-
-## 🎥 Demo
-
-[Watch Demo Video](YOUR_VIDEO_LINK_HERE) (60 seconds)
-
 ## 📚 How It Works
 
 1. **Natural Language Input** → User describes aircraft part
