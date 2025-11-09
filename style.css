@@ -260,3 +260,13 @@ button:disabled {
 .export-item:hover {
     background: #f0f0f0;
 }
+
+.warning {
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  color: #7a5900;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}

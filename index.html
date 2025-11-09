@@ -13,6 +13,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/GLTFExporter.js"></script>
     <!-- Load STLExporter.js library from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/STLExporter.js"></script>
+    <!-- Load GSAP library from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     
     <!-- Link to our CSS file -->
     <link rel="stylesheet" href="style.css">
@@ -59,6 +61,7 @@
             
             <!-- Output Display -->
             <div id="output">
+                <div id="warnSlot"></div>
                 <p>Enter a description and generate your aircraft part!</p>
             </div>
         </div>

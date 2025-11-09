@@ -116,6 +116,7 @@ function generateAircraftPart(params) {
     currentMesh = new THREE.Mesh(geometry, material);
     currentMesh.position.y = height / 2;
     scene.add(currentMesh);
+    frameObject(currentMesh, camera, controls);
 
     // WIREFRAME
     const wireframe = new THREE.WireframeGeometry(geometry);
@@ -201,80 +202,142 @@ function createStabilizer(params) {
 
 
 // ============================================
+// CAMERA AUTO-FRAMING (ZOOM TO FIT)
+// ============================================
+
+function frameObject(mesh, camera, controls) {
+    // Compute bounding box of the mesh
+    const box = new THREE.Box3().setFromObject(mesh);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    // Move OrbitControls target to the object's center
+    controls.target.copy(center);
+
+    // Largest dimension of the object
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    // Ideal distance based on object size + FOV
+    const fov = camera.fov * (Math.PI / 180);
+    let distance = maxDim / Math.sin(fov / 2);
+
+    distance *= 0.6; // tighten a little so it looks good
+
+    // New camera position (pull back along Z)
+    const newPos = center.clone().add(new THREE.Vector3(distance, distance, distance));
+
+    // Smooth transition instead of snapping
+    gsap.to(camera.position, {
+        x: newPos.x,
+        y: newPos.y,
+        z: newPos.z,
+        duration: 0.8,
+        ease: "power2.out"
+    });
+
+    // Must update controls afterward
+    controls.update();
+}
+
+
+// ============================================
 // PARAMETER VALIDATION
 // ============================================
 
 function validateParams(params, userInput) {
-    userInput = String(userInput || "");
-    const warnings = [];
+  userInput = String(userInput || "");
+  const warnings = [];
 
-    // ---- Validate TYPE ----
-    if (!params.type || typeof params.type !== "string") {
-        const guess = guessPartTypeFromText(userInput);
-        if (guess) {
-            warnings.push(`Type not detected from AI. Using inferred type: ${guess}.`);
-            params.type = guess;
-        } else {
-            throw new Error("Invalid or missing part type. Please describe a wing, fuselage, or stabilizer.");
-        }
+  // TYPE
+  if (!params.type || typeof params.type !== "string") {
+    const guess = guessPartTypeFromText(userInput);
+    if (guess) {
+      warnings.push(`Type not detected from AI. Using inferred type: ${guess}.`);
+      params.type = guess;
+    } else {
+      throw new Error("Invalid or missing part type. Please describe a wing, fuselage, or stabilizer.");
     }
+  }
+  params.type = params.type.toLowerCase();
 
-    params.type = params.type.toLowerCase();
-
-    // ---- Validate SPAN ----
-    if (params.span !== null) {
-        if (isNaN(params.span) || params.span <= 0) {
-            warnings.push("Span must be a positive number. Using default 10m.");
-            params.span = 10;
-        }
-        if (params.span > 100) {
-            warnings.push("Span too large (>100m). Clamped to 100m.");
-            params.span = 100;
-        }
+  // SPAN
+  if (params.span !== null && params.span !== undefined) {
+    if (isNaN(params.span) || params.span <= 0) {
+      warnings.push("Span must be a positive number. Using default 10m.");
+      params.span = 10;
     }
-
-    // ---- Validate CHORD ----
-    if (params.chord !== null) {
-        if (isNaN(params.chord) || params.chord <= 0) {
-            warnings.push("Chord must be a positive number. Using default 2m.");
-            params.chord = 2;
-        }
+    if (params.span > 100) {
+      warnings.push("Span too large (>100m). Clamped to 100m.");
+      params.span = 100;
     }
+  }
 
-    // ---- Validate SWEEP ----
-    if (params.sweep !== null) {
-        if (isNaN(params.sweep)) {
-            warnings.push("Sweep must be a number. Using 0°.");
-            params.sweep = 0;
-        }
-        if (params.sweep < 0 || params.sweep > 60) {
-            warnings.push(`Sweep ${params.sweep}° out of range (0–60°). Clamped.`);
-            params.sweep = Math.max(0, Math.min(params.sweep, 60));
-        }
+  // CHORD
+  if (params.chord !== null && params.chord !== undefined) {
+    if (isNaN(params.chord) || params.chord <= 0) {
+      warnings.push("Chord must be a positive number. Using default 2m.");
+      params.chord = 2;
     }
+  }
 
-    // ---- Validate LENGTH ----
-    if (params.length !== null) {
-        if (isNaN(params.length) || params.length <= 0) {
-            warnings.push("Length must be a positive number. Using default 8m.");
-            params.length = 8;
-        }
+  // SWEEP
+  if (params.sweep !== null && params.sweep !== undefined) {
+    if (isNaN(params.sweep)) {
+      warnings.push("Sweep must be a number. Using 0°.");
+      params.sweep = 0;
     }
-
-    // ---- Validate DIAMETER ----
-    if (params.diameter !== null) {
-        if (isNaN(params.diameter) || params.diameter <= 0) {
-            warnings.push("Diameter must be a positive number. Using default 2m.");
-            params.diameter = 2;
-        }
+    if (params.sweep < 0 || params.sweep > 60) {
+      warnings.push(`Sweep ${params.sweep}° out of range (0–60°). Clamped.`);
+      params.sweep = Math.max(0, Math.min(params.sweep, 60));
     }
+  }
 
-    // ---- Show warnings, if any ----
-    if (warnings.length > 0) {
-        showOutputError("⚠️ Parameter adjustments:<br>" + warnings.join("<br>"));
+  // LENGTH
+  if (params.length !== null && params.length !== undefined) {
+    if (isNaN(params.length) || params.length <= 0) {
+      warnings.push("Length must be a positive number. Using default 8m.");
+      params.length = 8;
     }
+  }
 
-    return params;
+  // DIAMETER
+  if (params.diameter !== null && params.diameter !== undefined) {
+    if (isNaN(params.diameter) || params.diameter <= 0) {
+      warnings.push("Diameter must be a positive number. Using default 2m.");
+      params.diameter = 2;
+    }
+  }
+
+  return { params, warnings };
+}
+
+function showWarningsAboveParams(warnings) {
+  const slot = document.getElementById('warnSlot');
+  if (!slot) return;
+  if (!warnings || warnings.length === 0) { slot.innerHTML = ''; return; }
+
+  // Prepend warnings block (does not clear parameters)
+  slot.innerHTML = `
+    <div class="params-box" style="background:#fff3cd;border:1px solid #ffe69c;margin-bottom:10px;">
+      <div class="param-item"><strong>⚠️ Parameter adjustments:</strong></div>
+      ${warnings.map(w => `<div class="param-item">${w}</div>`).join('')}
+    </div>
+  `;
+}
+
+function displayParameters(params) {
+  const output = document.getElementById('output');
+  // Append parameters (don’t wipe warnings)
+  let html = '<h4 class="success">✓ Extracted Parameters:</h4>';
+  html += '<div class="params-box">';
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== null && v !== undefined && k !== '_raw')
+      html += `<div class="param-item"><strong>${k}:</strong> ${v}</div>`;
+  }
+  html += '</div>';
+  output.innerHTML += html;
 }
 
 
@@ -411,27 +474,32 @@ Description: "${userInput}"
 // ============================================
 
 document.getElementById('generateBtn').addEventListener('click', async function () {
-    const userInput = document.getElementById('userInput').value.trim();
-    const apiKey = document.getElementById('apiKey').value.trim();
-    const output = document.getElementById('output');
+  const userInput = document.getElementById('userInput').value.trim();
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const output = document.getElementById('output');
+  const warnSlot = document.getElementById('warnSlot');
 
-    if (!apiKey) return showOutputError("Please enter your API key!");
-    if (!userInput) return showOutputError("Please describe an aircraft part!");
+  if (!apiKey) return showOutputError("Please enter your API key!");
+  if (!userInput) return showOutputError("Please describe an aircraft part!");
 
-    output.innerHTML = '<p class="loading">🤖 Analyzing description...</p>';
-    this.disabled = true;
+  // Reset only the warnings area; keep output appending behavior
+  if (warnSlot) warnSlot.innerHTML = '';
+  output.innerHTML = '<p class="loading">🤖 Analyzing description...</p>';
 
-    try {
-        let params = await callGeminiAPI(apiKey, userInput);
-        params = validateParams(params, userInput);
-        displayParameters(params);
-        generateAircraftPart(params);
-        output.innerHTML += '<p class="success" style="margin-top:10px;">✓ 3D model generated successfully!</p>';
-    } catch (err) {
-        showOutputError(err.message);
-    }
+  this.disabled = true;
+  try {
+    let raw = await callGeminiAPI(apiKey, userInput);
+    const { params, warnings } = validateParams(raw, userInput);
 
-    this.disabled = false;
+    showWarningsAboveParams(warnings);
+    displayParameters(params);
+    generateAircraftPart(params);
+
+    output.innerHTML += '<p class="success" style="margin-top:10px;">✓ 3D model generated successfully!</p>';
+  } catch (err) {
+    showOutputError(err.message);
+  }
+  this.disabled = false;
 });
 
 document.querySelectorAll('.example-chip').forEach(chip => {
@@ -467,7 +535,40 @@ function showOutputError(msg) {
 
 function showOutputSuccess(msg) {
     const output = document.getElementById("output");
-    output.innerHTML = `<p class="success">✅ ${msg}</p>`;
+    output.innerHTML += `<p class="success">✅ ${msg}</p>`;
+}
+
+
+// ============================================
+// WARNINGS RENDERING (above parameters)
+// ============================================
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function showWarningsAboveParams(warnings) {
+  const slot = document.getElementById("warnSlot");
+  if (!slot) return;
+
+  if (!warnings || warnings.length === 0) {
+    slot.innerHTML = "";
+    return;
+  }
+
+  const list = warnings
+    .map(w => `<li>${escapeHtml(w)}</li>`)
+    .join("");
+
+  slot.innerHTML = `
+    <div class="warning">
+      <strong>⚠️ Parameter adjustments</strong>
+      <ul style="margin:6px 0 0 18px;">${list}</ul>
+    </div>
+  `;
 }
 
 
