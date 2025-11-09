@@ -7,6 +7,10 @@ let currentParams = null;      // last validated params
 let suppressReframe = false;   // avoid camera jumps during slider drag
 let autorotate = true; // top-level state
 
+function fix(v) {
+    return Number(v.toFixed(3));
+}
+
 // ============================================
 // PERSISTENCE (LOCAL STORAGE)
 // ============================================
@@ -142,56 +146,68 @@ function onWindowResize() {
 // ============================================
 
 function generateAircraftPart(params, options = {}) {
-    console.log('🛠️ Generating aircraft part:', params);
-  
-    if (currentMesh) { safeRemove(currentMesh); currentMesh = null; }
-  
+    // options: { reframe?: boolean }
     const partType = (params.type || 'unknown').toLowerCase();
-    let geometry;
-  
-    // Material
+
+    // --- 1) Pick material (we'll reuse the existing mesh & just update color) ---
     const materialColor =
-      params.material?.includes('carbon')   ? 0x222222 :
-      params.material?.includes('titanium') ? 0xcccccc :
-      params.material?.includes('aluminum') ? 0xaaaaaa : 0x4488ff;
-  
-    const material = new THREE.MeshStandardMaterial({ color: materialColor, metalness: 0.7, roughness: 0.3 });
-  
-    // Geometry
-    if (partType.includes('wing'))       geometry = createWing(params);
+        params.material?.includes('carbon')   ? 0x222222 :
+        params.material?.includes('titanium') ? 0xcccccc :
+        params.material?.includes('aluminum') ? 0xaaaaaa : 0x4488ff;
+
+    // --- 2) Build fresh geometry for the selected part (sweep only warps vertices; no rotations here) ---
+    let geometry;
+    if (partType.includes('wing'))           geometry = createWing(params);
     else if (partType.includes('fuselage'))  geometry = createFuselage(params);
     else if (partType.includes('stabilizer'))geometry = createStabilizer(params);
-    else geometry = new THREE.BoxGeometry(3, 1, 6);
-  
-    geometry.computeVertexNormals();
-  
-    // Center so half above/below y=0
-    geometry.computeBoundingBox();
-    const bb = geometry.boundingBox;
-    const cx = 0.5 * (bb.min.x + bb.max.x);
-    const cy = 0.5 * (bb.min.y + bb.max.y);
-    const cz = 0.5 * (bb.min.z + bb.max.z);
-    geometry.translate(-cx, -cy, -cz);
-  
-    if (partType.includes('vertical')) {
-        geometry.rotateY(Math.PI / 2);
-        geometry.rotateZ(Math.PI / 2);
-    }    
+    else                                     geometry = new THREE.BoxGeometry(3, 1, 6);
 
-    currentMesh = new THREE.Mesh(geometry, material);
-    scene.add(currentMesh);
-  
-    if (options.reframe === true && !suppressReframe) frameObject(currentMesh, camera, controls);
-  
-    // Wireframe overlay
-    const wireframe = new THREE.WireframeGeometry(geometry);
-    const line = new THREE.LineSegments(wireframe);
-    line.material.transparent = true;
-    line.material.opacity = 0.15;
-    currentMesh.add(line);
-  
-    console.log('✓ Aircraft part generated!');
-}  
+    geometry.computeVertexNormals();
+
+    // Keep a stable pivot: center the geometry about its own bounding-box center
+    geometry.computeBoundingBox();
+    const center = new THREE.Vector3();
+    geometry.boundingBox.getCenter(center);
+    geometry.translate(-center.x, -center.y, -center.z);
+
+    // --- 3) Create mesh once; afterwards just swap geometry to avoid rotation resets ---
+    if (!currentMesh) {
+        currentMesh = new THREE.Mesh(
+            geometry,
+            new THREE.MeshStandardMaterial({ color: materialColor, metalness: 0.7, roughness: 0.3 })
+        );
+        scene.add(currentMesh);
+    } else {
+        // Preserve world rotation/position/scale automatically by reusing the mesh
+        if (currentMesh.geometry) currentMesh.geometry.dispose();
+        currentMesh.geometry = geometry;
+        // Update material color without recreating the material
+        if (currentMesh.material && currentMesh.material.color) {
+            currentMesh.material.color.setHex(materialColor);
+        }
+
+        // Remove & dispose previous wireframe if present
+        if (currentMesh.userData._wire) {
+            const old = currentMesh.userData._wire;
+            currentMesh.remove(old);
+            if (old.geometry) old.geometry.dispose();
+            if (old.material) old.material.dispose();
+            currentMesh.userData._wire = null;
+        }
+    }
+
+    // --- 4) Wireframe overlay (fresh each time) ---
+    const wf = new THREE.LineSegments(new THREE.WireframeGeometry(currentMesh.geometry));
+    wf.material.transparent = true;
+    wf.material.opacity = 0.15;
+    currentMesh.add(wf);
+    currentMesh.userData._wire = wf;
+
+    // --- 5) Optional reframe (never during live drag if you’re setting suppressReframe=true elsewhere) ---
+    if (options.reframe === true && !suppressReframe) {
+        frameObject(currentMesh, camera, controls);
+    }
+}
 
 function createWing(params) {
     const b      = coerce(params.span, 10);               // span (full)
@@ -625,29 +641,42 @@ function makeSlider({ key, label, min, max, step, value }) {
         const n = Math.max(min, Math.min(max, parsed));
         range.value = n;
         number.value = n.toFixed(2);
-        document.getElementById(`${id}_val`).textContent = n;
+        document.getElementById(`${id}_val`).textContent = fix(n);
         currentParams[key] = n;
         suppressReframe = !reframe;
         regenerateFromPanel(reframe);
     };
 
     // Events
+    // === LIVE UPDATE (while dragging) ===
     range.addEventListener('input', () => {
-        // update only the live number & model
+        suppressReframe = true;
+
         const parsed = parseFloat(range.value);
         if (!Number.isFinite(parsed)) return;
+
         currentParams[key] = parsed;
-        document.getElementById(`${id}_val`).textContent = parsed.toFixed(2);
-        suppressReframe = true;
-        generateAircraftPart(currentParams, { reframe:false });
-    
+        number.value = parsed;
+        document.getElementById(`${id}_val`).textContent = parsed.toFixed(3);
+
+        // ✅ Update aerodynamic metrics live (only for wing)
         if (currentParams.type.includes("wing")) {
             updateAeroMetricsFromParams(currentParams);
         }
+
+        // ✅ Regenerate geometry WITHOUT rebuilding UI, WITHOUT moving camera
+        generateAircraftPart(currentParams, { reframe: false });
+});
+
+
+    // === FINAL UPDATE (when letting go) ===
+    range.addEventListener('change', () => {
+        suppressReframe = false;
+        regenerateFromPanel(true);  // rebuild UI & reframe ONLY once
+        generateAircraftPart(currentParams, { reframe: false, keepRotation: true });
     });
-    
-    // When released → rebuild panel & reframe
-    range.addEventListener('change', () => setVal(range.value, true));    
+
+
     number.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') setVal(number.value, true);
     });
@@ -820,7 +849,7 @@ document.querySelectorAll('.example-chip').forEach(chip => {
         showWarningsAboveParams(warnings);
         displayParameters(params, true);
         buildParamPanel(params);
-        generateAircraftPart(params, { reframe: true });
+        generateAircraftPart(params, { reframe: true, keepRotation: true });
     });
 });
 
@@ -1071,9 +1100,9 @@ function updateAeroMetricsFromParams(params) {
     const S = (b * (cr + ct)) / 2;
     const AR = b * b / S;
 
-    document.getElementById("arInput").value = AR.toFixed(3);
-    document.getElementById("lambdaInput").value = lambda.toFixed(3);
-    document.getElementById("areaInput").value = S.toFixed(3);
+    document.getElementById("arInput").value = fix(AR);
+    document.getElementById("lambdaInput").value = fix(lambda);
+    document.getElementById("areaInput").value = fix(S);
 }
 
 function attachAeroMetricHandlers() {
