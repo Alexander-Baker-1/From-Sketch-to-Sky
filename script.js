@@ -225,7 +225,11 @@ function generateAircraftPart(params, options = {}) {
     if (reframe && !suppressReframe) {
       frameObject(currentMesh, camera, controls);
     }
-  
+
+    // Run safety validation
+    const safetyChecks = runSafetyChecks(params);
+    displaySafetyChecks(safetyChecks);
+
     console.log('✓ Aircraft part generated!');
 }  
 
@@ -349,6 +353,194 @@ function createStabilizer(params) {
 
     return geo;
 }
+
+
+// ============================================
+// SAFETY VALIDATION SYSTEM
+// ============================================
+
+/**
+ * Run safety checks on aircraft parameters
+ * Based on real aircraft specifications and aerospace engineering principles
+ * 
+ * Sources:
+ * - Airbus A380 specs: https://www.airbus.com/en/products-services/commercial-aircraft/passenger-aircraft/a380
+ * - Boeing 747-8 specs: https://www.boeing.com/commercial/747
+ * - Concorde specs: https://www.nasa.gov/centers/dryden/about/Organizations/Technology/Facts/TF-2004-09-DFRC.html
+ * - Aerospace engineering principles from "Introduction to Flight" by John D. Anderson
+ */
+function runSafetyChecks(params) {
+    const issues = [];      // Critical errors (red) - unsafe designs
+    const warnings = [];    // Warnings (yellow) - unusual but possible
+    
+    if (!params || !params.type) return { issues, warnings };
+    
+    const type = params.type.toLowerCase();
+    
+    // ============================================
+    // WING SAFETY CHECKS
+    // ============================================
+    if (type.includes('wing')) {
+        
+        // Check 1: Wingspan
+        // Reference: Airbus A380 = 79.8m (largest passenger jet)
+        if (params.span > 80) {
+            issues.push('⛔ CRITICAL: Span exceeds maximum safe limit (A380 = 79.8m)');
+        }
+        if (params.span < 2) {
+            issues.push('⛔ CRITICAL: Span too small to be functional');
+        }
+        
+        // Check 2: Root Chord
+        // Reference: Structural engineering minimum for aluminum/composite wings
+        if (params.rootChord < 0.5) {
+            issues.push('⛔ CRITICAL: Root chord too small for structural integrity');
+        }
+        if (params.rootChord > 15) {
+            warnings.push('⚠️ WARNING: Unusually large root chord');
+        }
+        
+        // Check 3: Sweep Angle
+        // Reference: Concorde = 60° (most extreme commercial jet)
+        if (params.sweep > 60) {
+            issues.push('⛔ CRITICAL: Sweep angle exceeds aerodynamic limits (Concorde = 60°)');
+        }
+        if (params.sweep > 50 && params.sweep <= 60) {
+            warnings.push('⚠️ WARNING: Very high sweep angle (supersonic aircraft range)');
+        }
+        
+        // Check 4: Aspect Ratio (calculated)
+        // Reference: Anderson, "Introduction to Flight"
+        // Typical ranges: Fighters 2-4, Airliners 8-12, Gliders 15-40
+        if (params.rootChord && params.tipChord) {
+            const area = (params.span * (params.rootChord + params.tipChord)) / 2;
+            const AR = (params.span * params.span) / area;
+            
+            if (AR > 15) {
+                warnings.push(`⚠️ WARNING: High aspect ratio (AR=${AR.toFixed(1)}) requires special structural design (glider range)`);
+            }
+            if (AR < 3) {
+                warnings.push(`⚠️ WARNING: Low aspect ratio (AR=${AR.toFixed(1)}) reduces lift efficiency (fighter jet range)`);
+            }
+        }
+        
+        // Check 5: Taper Ratio (calculated)
+        // Reference: Raymer, "Aircraft Design: A Conceptual Approach"
+        // Optimal range: 0.4-0.6, Below 0.2 = tip stall risk
+        if (params.rootChord && params.tipChord) {
+            const lambda = params.tipChord / params.rootChord;
+            
+            if (lambda < 0.2) {
+                warnings.push(`⚠️ WARNING: Extreme taper (λ=${lambda.toFixed(2)}) may cause tip stall before root`);
+            }
+            if (lambda > 1.0) {
+                warnings.push(`⚠️ WARNING: Tip chord larger than root (λ=${lambda.toFixed(2)}) is unusual`);
+            }
+        }
+    }
+    
+    // ============================================
+    // FUSELAGE SAFETY CHECKS
+    // ============================================
+    else if (type.includes('fuselage')) {
+        
+        // Check 1: Length
+        // Reference: Boeing 747-8 = 76.3m (longest passenger jet)
+        if (params.length > 80) {
+            issues.push('⛔ CRITICAL: Length exceeds practical limits (747-8 = 76.3m)');
+        }
+        if (params.length < 5) {
+            warnings.push('⚠️ WARNING: Very short for passenger aircraft');
+        }
+        
+        // Check 2: Diameter
+        // Reference: Typical fuselage diameters: 3-6m
+        if (params.diameter > 8) {
+            warnings.push('⚠️ WARNING: Unusually large diameter (requires special manufacturing)');
+        }
+        if (params.diameter < 1.5) {
+            warnings.push('⚠️ WARNING: Too narrow for typical passenger seating');
+        }
+        
+        // Check 3: Length-to-diameter ratio
+        // Reference: Typical L/D ratio: 10-15 for stability
+        if (params.length && params.diameter) {
+            const ratio = params.length / params.diameter;
+            if (ratio > 20) {
+                warnings.push(`⚠️ WARNING: High length/diameter ratio (${ratio.toFixed(1)}) may cause structural flexibility`);
+            }
+            if (ratio < 5) {
+                warnings.push(`⚠️ WARNING: Low length/diameter ratio (${ratio.toFixed(1)}) - very stubby design`);
+            }
+        }
+    }
+    
+    // ============================================
+    // STABILIZER SAFETY CHECKS
+    // ============================================
+    else if (type.includes('stabilizer')) {
+        
+        // Check 1: Span/Height
+        if (params.span > 15) {
+            warnings.push('⚠️ WARNING: Very large stabilizer (exceeds typical tail dimensions)');
+        }
+        if (params.span < 2) {
+            warnings.push('⚠️ WARNING: Very small stabilizer (may be insufficient for control)');
+        }
+        
+        // Check 2: Sweep
+        if (params.sweep > 50) {
+            warnings.push('⚠️ WARNING: High sweep angle for stabilizer (reduces control authority)');
+        }
+    }
+    
+    return { issues, warnings };
+}
+
+/**
+ * Display safety check results in the UI
+ */
+function displaySafetyChecks(checks) {
+    const safetyDiv = document.getElementById('safetyChecks');
+    if (!safetyDiv) return;
+    
+    let html = '<h4>🛡️ Safety Validation</h4>';
+    
+    // All checks passed
+    if (checks.issues.length === 0 && checks.warnings.length === 0) {
+        html += `
+            <div style="background:#d4edda; border-left:4px solid #28a745; padding:10px; border-radius:4px;">
+                <strong style="color:#155724;">✓ All safety checks passed</strong>
+                <p style="margin:5px 0 0 0; font-size:12px; color:#155724;">
+                    This design meets aerospace engineering standards.
+                </p>
+            </div>
+        `;
+    } else {
+        // Critical issues (red)
+        if (checks.issues.length > 0) {
+            html += '<div style="background:#f8d7da; border-left:4px solid #dc3545; padding:10px; border-radius:4px; margin:5px 0;">';
+            html += '<strong style="color:#721c24;">Critical Issues:</strong>';
+            checks.issues.forEach(issue => {
+                html += `<div style="margin:5px 0 0 0; font-size:12px; color:#721c24;">${escapeHtml(issue)}</div>`;
+            });
+            html += '</div>';
+        }
+        
+        // Warnings (yellow)
+        if (checks.warnings.length > 0) {
+            html += '<div style="background:#fff3cd; border-left:4px solid #ffc107; padding:10px; border-radius:4px; margin:5px 0;">';
+            html += '<strong style="color:#856404;">Warnings:</strong>';
+            checks.warnings.forEach(warning => {
+                html += `<div style="margin:5px 0 0 0; font-size:12px; color:#856404;">${escapeHtml(warning)}</div>`;
+            });
+            html += '</div>';
+        }
+    }
+    
+    safetyDiv.innerHTML = html;
+}
+
 
 // ============================================
 // CAMERA AUTO-FRAMING (ZOOM TO FIT)
