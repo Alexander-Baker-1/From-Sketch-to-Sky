@@ -1,11 +1,7 @@
 /* ============================================
    RESET AND BASE STYLES
-   ============================================ */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+============================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   font-family: Arial, sans-serif;
@@ -15,8 +11,8 @@ body {
 }
 
 /* ============================================
-   LAYOUT - SPLIT SCREEN
-   ============================================ */
+   LAYOUT
+============================================ */
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -40,89 +36,113 @@ body {
   box-shadow: 0 4px 20px rgba(0,0,0,0.1);
 }
 
+/* Viewer wrapper (for floating UI) */
+#viewerWrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* ============================================
+   FLOATING PANELS (TOP RIGHT)
+============================================ */
+.floating-panel {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    z-index: 50;
+}
+
+.panel-section {
+    padding: 8px;             /* was 10px */
+}
+
+.metric-group,
+.slider-row {
+    margin-bottom: 8px;       /* tighten spacing */
+}
+
+.slider-row label {
+    font-size: 12px;          /* smaller headers */
+}
+
+.metric-group input {
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+.slider-row input[type="number"] {
+    width: 70px !important;   /* reduce wide number boxes */
+    padding: 4px 6px;
+}
+
+#viewerWrapper {
+    position: relative;
+    min-height: 650px;   /* increase this so panels fit inside */
+}
+
+/* PARAMETERS PANEL — right side */
+#paramPanelFloating {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+}
+
+/* AERODYNAMIC METRICS PANEL — left side */
+#aeroPanelFloating {
+    position: absolute;
+    top: 20px;
+    left: 20px;   /* ✅ MOVE TO LEFT SIDE */
+    z-index: 10;
+}
+
+.hidden { display: none !important; }
+
 /* ============================================
    TYPOGRAPHY
-   ============================================ */
-h1 {
-  color: #333;
-  margin-bottom: 10px;
-  font-size: 24px;
-}
+============================================ */
+h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
+.subtitle { color: #666; margin-bottom: 20px; font-size: 13px; }
 
-.subtitle {
-  color: #666;
-  margin-bottom: 20px;
-  font-size: 13px;
-}
-
-label {
-  display: block;
-  color: #555;
-  margin-bottom: 6px;
-  font-weight: bold;
-  font-size: 14px;
-}
+label { display: block; color: #555; margin-bottom: 6px; font-weight: bold; font-size: 14px; }
 
 /* ============================================
-   FORM INPUTS
-   ============================================ */
-.input-group {
-  margin-bottom: 15px;
-}
+   INPUTS
+============================================ */
+.input-group { margin-bottom: 15px; }
 
 textarea,
 input[type="text"] {
-  width: 100%;
-  padding: 10px;
-  border: 2px solid #ddd;
-  border-radius: 5px;
-  font-size: 13px;
-  font-family: inherit;
+  width: 100%; padding: 10px;
+  border: 2px solid #ddd; border-radius: 5px;
+  font-size: 13px; font-family: inherit;
 }
 
-textarea {
-  min-height: 80px;
-  resize: vertical;
-}
+textarea { min-height: 80px; resize: vertical; }
 
 textarea:focus,
 input:focus {
-  outline: none;
-  border-color: #667eea;
+  outline: none; border-color: #667eea;
 }
 
 /* ============================================
-   BUTTON
-   ============================================ */
+   BUTTONS
+============================================ */
 button {
-  width: 100%;
-  padding: 12px;
+  width: 100%; padding: 12px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 15px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: transform 0.2s;
+  color: white; border: none; border-radius: 5px;
+  font-size: 15px; font-weight: bold;
+  cursor: pointer; transition: transform 0.2s;
 }
 
-button:hover {
-  transform: translateY(-2px);
-}
-
-button:active {
-  transform: translateY(0);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+button:hover { transform: translateY(-2px); }
+button:active { transform: translateY(0); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ============================================
    EXAMPLE CHIPS
-   ============================================ */
+============================================ */
 .example-chip {
   display: inline-block;
   background: #e0e0e0;
@@ -143,19 +163,16 @@ button:disabled {
 
 /* ============================================
    OUTPUT DISPLAY
-   ============================================ */
+============================================ */
 #output {
-  margin-top: 15px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 5px;
+  margin-top: 15px; padding: 12px;
+  background: #f8f9fa; border-radius: 5px;
   font-size: 13px;
 }
 
 .params-box {
   background: #e8f5e9;
-  padding: 12px;
-  border-radius: 5px;
+  padding: 12px; border-radius: 5px;
   margin-top: 10px;
 }
 
@@ -167,7 +184,7 @@ button:disabled {
 
 /* ============================================
    3D VIEWER
-   ============================================ */
+============================================ */
 #viewer {
   width: 100%;
   height: 500px;
@@ -178,132 +195,52 @@ button:disabled {
 
 .viewer-label {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px 12px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: #333;
+  top: 10px; left: 10px;
+  background: rgba(255,255,255,0.9);
+  padding: 8px 12px; border-radius: 5px;
+  font-size: 12px; color: #333;
   z-index: 10;
 }
 
 /* ============================================
    STATUS MESSAGES
-   ============================================ */
-.loading {
-  color: #667eea;
-  font-weight: bold;
-}
-
-.error {
-  color: red;
-  font-weight: bold;
-}
-
-.success {
-  color: green;
-  font-weight: bold;
-}
+============================================ */
+.loading { color: #667eea; font-weight: bold; }
+.error { color: red; font-weight: bold; }
+.success { color: green; font-weight: bold; }
 
 /* ============================================
-   RESPONSIVE DESIGN
-   ============================================ */
-@media (max-width: 768px) {
-  .container {
-    flex-direction: column;
-  }
-  #viewer {
-    height: 400px;
-  }
-}
-
-/* ============================================
-   EXPORT DROPDOWN
-   ============================================ */
-.export-dropdown {
-  position: relative;
-  margin-top: 10px;
-}
+   EXPORT MENU
+============================================ */
+.export-dropdown { position: relative; margin-top: 10px; }
 
 #exportDropdownBtn {
-  width: 100%;
-  padding: 12px;
-  background: #444;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-weight: bold;
-  cursor: pointer;
+  width: 100%; padding: 12px; background: #444;
+  color:white; border:none; border-radius:5px;
 }
 
 .export-menu {
-  display: none;
-  position: absolute;
-  top: 45px;
-  left: 0;
-  width: 100%;
-  background: white;
-  border-radius: 5px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 5;
+  display:none; position:absolute; top:45px; left:0;
+  width:100%; background:white; border-radius:5px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  z-index:5;
 }
 
 .export-item {
-  padding: 10px;
-  cursor: pointer;
-  border-bottom: 1px solid #eee;
+  padding:10px; cursor:pointer;
+  border-bottom:1px solid #eee;
 }
 
-.export-item:last-child {
-  border-bottom: none;
-}
+.export-item:last-child { border-bottom:none; }
 
-.export-item:hover {
-  background: #f0f0f0;
-}
+.export-item:hover { background:#f0f0f0; }
 
 /* ============================================
-   WARNINGS + PARAM PANEL
-   ============================================ */
-.warning {
-  background: #fff3cd;
-  border: 1px solid #ffe69c;
-  color: #7a5900;
-  padding: 10px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  font-size: 13px;
-}
+   SLIDERS
+============================================ */
+.slider-row { margin: 10px 0; }
+.slider-row label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; }
+.slider-row input[type="range"] { width:100%; }
+.slider-row input[type="number"] { padding:6px 8px; font-size:13px; }
 
-.param-panel {
-  margin-top: 15px;
-  padding: 12px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  border: 1px solid #eee;
-}
-
-.param-panel.hidden { display: none; }
-
-.slider-row {
-  margin: 10px 0;
-}
-
-.slider-row label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-
-.slider-row input[type="range"] {
-  width: 100%;
-}
-
-.slider-row input[type="number"] { padding: 6px 8px; font-size: 13px; }
-
-.hidden {
-    display: none;
-}
+.hidden { display:none; }

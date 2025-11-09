@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI Aircraft Generator</title>
 
-  <!-- Three.js + helpers (r128 to match examples) -->
+  <!-- Three.js + helpers -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/GLTFExporter.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/exporters/STLExporter.js"></script>
 
-  <!-- GSAP (single CDN) -->
+  <!-- GSAP -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 
   <!-- Styles -->
@@ -19,7 +19,8 @@
 </head>
 <body>
     <div class="container">
-        <!-- LEFT PANEL: Controls -->
+
+        <!-- LEFT PANEL -->
         <div class="left-panel">
         <h1>✈️ AI Aircraft Generator</h1>
         <p class="subtitle">Natural Language to 3D Aircraft Parts</p>
@@ -47,17 +48,10 @@
         <!-- Example Prompts -->
         <div style="margin-top: 15px;">
             <label>💡 Try These Examples:</label>
-            <div class="example-chip"
-                data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
-
-            <div class="example-chip"
-                data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
-
-            <div class="example-chip"
-                data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
-
-            <div class="example-chip"
-                data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
+            <div class="example-chip" data-params='{"type":"wing","span":12,"chord":2,"sweep":35}'>Swept Wing</div>
+            <div class="example-chip" data-params='{"type":"wing","span":10,"chord":2.5,"sweep":45}'>Delta Wing</div>
+            <div class="example-chip" data-params='{"type":"fuselage","length":8,"diameter":2}'>Fuselage</div>
+            <div class="example-chip" data-params='{"type":"vertical stabilizer","span":4,"sweep":0}'>Vertical Stabilizer</div>
         </div>
 
         <!-- Generate Button -->
@@ -79,31 +73,6 @@
             </div>
         </div>
 
-        <!-- Universal Parameter Panel (auto-fills per part type) -->
-        <div id="paramPanel" class="param-panel hidden">
-            <h3 style="margin-bottom:10px;">Parameters</h3>
-            <div id="paramControls"></div>
-        </div>
-
-        <div id="aeroMetricsBox" class="params-box hidden" style="margin-top:15px;">
-            <h4>Aerodynamic Metrics</h4>
-        
-            <div class="param-item">
-                <label>Aspect Ratio (AR)</label>
-                <input id="arInput" type="number" step="0.01" min="0.1" max="200">
-            </div>
-        
-            <div class="param-item">
-                <label>Taper Ratio (λ = Ct / Cr)</label>
-                <input id="lambdaInput" type="number" step="0.01" min="0.01" max="2">
-            </div>
-        
-            <div class="param-item">
-                <label>Planform Area (S)</label>
-                <input id="areaInput" type="number" step="0.01" min="0.1" max="500">
-            </div>
-        </div>              
-
         <!-- Output Display -->
         <div id="output">
             <div id="warnSlot"></div>
@@ -111,13 +80,38 @@
         </div>
         </div>
 
-        <!-- RIGHT PANEL: 3D Viewer -->
+        <!-- RIGHT PANEL -->
         <div class="right-panel">
-        <h1>3D Viewer</h1>
-        <div id="viewer">
-            <div class="viewer-label">🎮 Auto-rotating | 3D model will appear here</div>
+            <h1>3D Viewer</h1>
+
+            <!-- ✅ ✅ New wrapper for viewer + floating panels -->
+            <div id="viewerWrapper">
+
+                <div id="viewer"></div>
+            
+                <!-- MUST BE INSIDE THE WRAPPER -->
+                <div id="paramPanelFloating" class="floating-panel hidden">
+                    <div class="panel-section">
+                        <h3>Parameters</h3>
+                        <div id="paramControls"></div>
+                    </div>
+                </div>
+            
+                <div id="aeroPanelFloating" class="floating-panel hidden">
+                    <div class="panel-section">
+                        <h3>Aerodynamic Metrics</h3>
+                        <label>Aspect Ratio (AR)</label>
+                        <input id="arInput" type="number">
+                        <label>Taper Ratio (λ = Ct / Cr)</label>
+                        <input id="lambdaInput" type="number">
+                        <label>Planform Area (S)</label>
+                        <input id="areaInput" type="number">
+                    </div>
+                </div>
+            
+            </div>            
         </div>
-        </div>
+
     </div>
 
   <!-- App Script -->

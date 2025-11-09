@@ -548,22 +548,23 @@ function showWarningsAboveParams(warnings) {
 
 function buildParamPanel(params) {
     currentParams = { ...params };
-    const panel = document.getElementById('paramPanel');
-    const ctrl  = document.getElementById('paramControls');
-    const aeroBox = document.getElementById('aeroMetricsBox');
 
-    if (!panel || !ctrl) return;
-    ctrl.innerHTML = '';
-    aeroBox.classList.add("hidden"); // ALWAYS hide by default
+    const ctrl = document.getElementById("paramControls");
+    const paramPanelFloating  = document.getElementById("paramPanelFloating");
+
+    if (!ctrl || !paramPanelFloating) return;
+
+    ctrl.innerHTML = "";
+    paramPanelFloating.classList.remove("hidden");
 
     const type = (params.type || "").toLowerCase();
 
     const defsByType = {
         wing: [
-            { key: 'span',       label: 'Span (m)',        min: 0.5, max: 100, step: 0.1, value: fix(coerce(params.span, 10)) },
-            { key: 'rootChord',  label: 'Root chord (m)',  min: 0.1, max: 10,  step: 0.1, value: fix(coerce(params.rootChord, 2)) },
-            { key: 'tipChord',   label: 'Tip chord (m)',   min: 0.05,max: 10,  step: 0.1, value: fix(coerce(params.tipChord, 1)) },
-            { key: 'sweep',      label: 'LE Sweep (°)',    min: 0,   max: 60,  step: 1,   value: fix(coerce(params.sweep, 0)) },
+            { key: 'span',       label: 'Span (m)',       min: 0.5, max: 100, step: 0.1, value: fix(coerce(params.span, 10)) },
+            { key: 'rootChord',  label: 'Root chord (m)', min: 0.1, max: 10,  step: 0.1, value: fix(coerce(params.rootChord, 2)) },
+            { key: 'tipChord',   label: 'Tip chord (m)',  min: 0.05,max: 10,  step: 0.1, value: fix(coerce(params.tipChord, 1)) },
+            { key: 'sweep',      label: 'LE Sweep (°)',   min: 0,   max: 60,  step: 1,   value: fix(coerce(params.sweep, 0)) },
         ],
         fuselage: [
             { key: 'length',   label: 'Length (m)',   min: 0.5, max: 100, step: 0.1, value: fix(coerce(params.length, 8)) },
@@ -575,51 +576,45 @@ function buildParamPanel(params) {
         ]
     };
 
-    const defList =
+    const sliders =
         type.includes("wing") ? defsByType.wing :
         type.includes("fuselage") ? defsByType.fuselage :
         defsByType.stabilizer;
 
-    // Build sliders
-    defList.forEach(def => ctrl.appendChild(makeSlider(def)));
+    sliders.forEach(def => ctrl.appendChild(makeSlider(def)));
 
-    // ✅ Only show Aero Metrics for wing
-    if (type.includes("wing")) {
-        aeroBox.classList.remove("hidden");
-        updateAeroMetricsFromParams(params);
-    } else {
-        aeroBox.classList.add("hidden");
-    }    
-
-    // ✅ NACA input (only wings)
+    // ✅ NACA for wings
     if (type.includes("wing")) {
         const wrap = document.createElement("div");
-        wrap.className = "slider-row";
+        wrap.className = "metric-group";
 
-        const label = document.createElement("label");
-        label.textContent = "NACA (4-digit)";
-        label.style.display = "block";
+        wrap.innerHTML = `
+            <label>NACA (4-digit)</label>
+            <input id="naca_code" type="text" maxlength="4" style="width:90px" value="${params.naca || ''}">
+        `;
 
-        const input = document.createElement("input");
-        input.type = "text";
-        input.id = "naca_code";
-        input.placeholder = "2412";
-        input.value = params.naca || "";
-        input.maxLength = 8;
-        input.style.width = "100px";
+        ctrl.appendChild(wrap);
 
-        input.addEventListener("change", () => {
-            const digits = input.value.replace(/\D/g, "");
+        document.getElementById("naca_code").addEventListener("change", () => {
+            const digits = document.getElementById("naca_code").value.replace(/\D/g, "");
             currentParams.naca = /^\d{4}$/.test(digits) ? digits : null;
             regenerateFromPanel(true);
         });
 
-        wrap.appendChild(label);
-        wrap.appendChild(input);
-        ctrl.appendChild(wrap);
-    }
+        updateAeroMetricsFromParams(params);
+        const aeroPanel = document.getElementById("aeroPanelFloating");
 
-    panel.classList.remove("hidden");
+        if (type.includes("wing")) {
+            aeroPanel.classList.remove("hidden");
+            updateAeroMetricsFromParams(params);
+        } else {
+            aeroPanel.classList.add("hidden");
+        }
+    } 
+    else {
+        // hide aero metrics entirely for non wings
+        document.querySelector("#paramPanelFloating .panel-section:nth-child(2)").classList.add("hidden");
+    }
 }
 
 function makeSlider({ key, label, min, max, step, value }) {
@@ -875,6 +870,15 @@ document.querySelectorAll('.example-chip').forEach(chip => {
         resetParamPanel();
         showWarningsAboveParams(warnings);
         displayParameters(params, true);
+
+        document.getElementById("paramPanelFloating").style.display = "block";
+        document.getElementById("aeroPanelFloating").style.display =
+        params.type.includes("wing") ? "block" : "none";
+
+        document.getElementById("paramPanelFloating").style.display = "block";
+        document.getElementById("aeroPanelFloating").style.display =
+        params.type.includes("wing") ? "block" : "none";
+
         buildParamPanel(params);
         generateAircraftPart(params, { reframe: true, keepRotation: true });
     });
@@ -940,10 +944,17 @@ function clearOutput() {
     output.innerHTML = '<div id="warnSlot"></div>';
 }
 function resetParamPanel() {
-    const panel = document.getElementById('paramPanel');
-    const ctrl = document.getElementById('paramControls');
-    if (panel && ctrl) { ctrl.innerHTML = ''; panel.classList.add('hidden'); }
+    const panel = document.getElementById("paramPanelFloating");
+    const ctrl = document.getElementById("paramControls");
+    if (panel && ctrl) {
+        ctrl.innerHTML = "";
+        panel.classList.add("hidden");
+    }
+
+    const aero = document.getElementById("aeroPanelFloating");
+    if (aero) aero.classList.add("hidden");
 }
+
 function isValidNaca4(s) {
     return typeof s === 'string' && /^\d{4}$/.test(s);
 }
