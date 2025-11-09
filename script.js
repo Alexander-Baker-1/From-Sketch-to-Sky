@@ -260,9 +260,7 @@ function createStabilizer(params) {
     const type = (params.type || '').toLowerCase();
     if (type.includes('vertical')) {
         geometry.rotateX(Math.PI / 2);
-    } else {
-        const sweep = (coerce(params.sweep, 0)) * Math.PI / 180;
-        geometry.rotateZ(sweep);
+    } else {       
         geometry.rotateX(Math.PI / 2);
     }
     return geometry;
@@ -517,7 +515,9 @@ function buildParamPanel(params) {
     if (type.includes("wing")) {
         aeroBox.classList.remove("hidden");
         updateAeroMetricsFromParams(params);
-    }
+    } else {
+        aeroBox.classList.add("hidden");
+    }    
 
     // ✅ NACA input (only wings)
     if (type.includes("wing")) {
@@ -629,10 +629,22 @@ function makeSlider({ key, label, min, max, step, value }) {
     };
 
     // Events
-    range.addEventListener('input', () => setVal(range.value, false));
-    range.addEventListener('change', () => setVal(range.value, true));
-    number.addEventListener('input', () => setVal(number.value, false));
-    number.addEventListener('change', () => setVal(number.value, true));
+    range.addEventListener('input', () => {
+        // update only the live number & model
+        const parsed = parseFloat(range.value);
+        if (!Number.isFinite(parsed)) return;
+        currentParams[key] = parsed;
+        document.getElementById(`${id}_val`).textContent = parsed;
+        suppressReframe = true;
+        generateAircraftPart(currentParams, { reframe:false });
+    
+        if (currentParams.type.includes("wing")) {
+            updateAeroMetricsFromParams(currentParams);
+        }
+    });
+    
+    // When released → rebuild panel & reframe
+    range.addEventListener('change', () => setVal(range.value, true));    
     number.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') setVal(number.value, true);
     });
@@ -644,10 +656,17 @@ function makeSlider({ key, label, min, max, step, value }) {
 
 function regenerateFromPanel(allowReframe = false) {
     if (!currentParams) return;
+
+    // Update aero metrics if wing
     if (currentParams.type.includes("wing")) {
         updateAeroMetricsFromParams(currentParams);
     }
+
+    // Regenerate 3D
     generateAircraftPart(currentParams, { reframe: allowReframe });
+
+    // Rebuild sliders to keep everything in sync
+    buildParamPanel(currentParams);
 }
 
 // ============================================
@@ -1059,20 +1078,18 @@ function attachAeroMetricHandlers() {
     const lamEl  = document.getElementById("lambdaInput");
     const areaEl = document.getElementById("areaInput");
 
-    // === AR edited → span changes ===
+    // AR → span
     arEl.addEventListener("change", () => {
         if (!currentParams || !currentParams.type.includes("wing")) return;
 
         const AR = Number(arEl.value);
         const S  = Number(areaEl.value);
-
-        const b = Math.sqrt(AR * S);
-        currentParams.span = b;
+        currentParams.span = Math.sqrt(AR * S);
 
         regenerateFromPanel(true);
     });
 
-    // === λ edited → tipChord changes ===
+    // λ → tip chord
     lamEl.addEventListener("change", () => {
         if (!currentParams || !currentParams.type.includes("wing")) return;
 
@@ -1082,7 +1099,7 @@ function attachAeroMetricHandlers() {
         regenerateFromPanel(true);
     });
 
-    // === S edited → chord lengths change (span fixed) ===
+    // S → rootChord + tipChord
     areaEl.addEventListener("change", () => {
         if (!currentParams || !currentParams.type.includes("wing")) return;
 
@@ -1091,10 +1108,8 @@ function attachAeroMetricHandlers() {
         const λ = currentParams.tipChord / currentParams.rootChord;
 
         const cr = (2 * S / b) / (1 + λ);
-        const ct = cr * λ;
-
         currentParams.rootChord = cr;
-        currentParams.tipChord = ct;
+        currentParams.tipChord = cr * λ;
 
         regenerateFromPanel(true);
     });
